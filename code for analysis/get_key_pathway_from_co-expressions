@@ -1,0 +1,290 @@
+###########################################
+####get key pathway form co-expressions####
+###########################################
+
+
+load("~/Pro_CoExpression/data/KEGG_pathway_genelist.RData")
+pathway_term                 <- names(KEGG_pathway_genelist)
+pathway_term
+metabolism_term              <- pathway_term[grep(pattern = "metabolism",pathway_term)]
+signaling_pathway_term       <- pathway_term[grep(pattern = "signaling pathway",pathway_term)]
+signaling_term               <- pathway_term[grep(pattern = "signaling",pathway_term)]
+pathways_term                <- pathway_term[grep(pattern = "pathway",pathway_term)]
+signaling_pathway_term       <- c(signaling_pathway_term,signaling_term,pathways_term)
+signaling_pathway_term       <- signaling_pathway_term[!duplicated(signaling_pathway_term)]
+
+metabolism_term_genelist           <- KEGG_pathway_genelist[names(KEGG_pathway_genelist) %in% metabolism_term]
+signaling_pathway_term_genelist    <- KEGG_pathway_genelist[names(KEGG_pathway_genelist) %in% signaling_pathway_term]
+save(metabolism_term_genelist,file = "Pro_CoExpression/data/metabolism_term_kegg_genelist.RData")
+save(signaling_pathway_term_genelist,file = "Pro_CoExpression/data/signaling_pathway_term_kegg_genelist.RData")
+####metabolism pathway####
+load("Pro_CoExpression/data/metabolism_term_kegg_genelist.RData")
+get.enrich.score                   <- function(x){
+  pathway.gene                       <- x
+  celltype_pathway_coexp             <- celltype_reliable_coexp_df[celltype_reliable_coexp_df$gene1 %in% pathway.gene, ]
+  celltype_pathway_coexp             <- celltype_pathway_coexp[celltype_pathway_coexp$gene2 %in% pathway.gene,]
+  celltype_pathway_coexp             <- celltype_pathway_coexp[celltype_pathway_coexp$gene1 != celltype_pathway_coexp$gene2,]
+  gene.pair.num                      <- length(pathway.gene)*(length(pathway.gene)-1)/2
+  celltype_pathway_coexp_value       <- celltype_pathway_coexp$median_value
+  enrich.score                        <- sum(celltype_pathway_coexp_value)/gene.pair.num
+}
+
+####1.BRCA####
+Tcell_reliable_coexp_df               <- readRDS("~/Pro_CoExpression/output/data/3CA/Breast/common_genesets/Tcell/Tcell_reliable_coexp_df.rds")
+load("~/Pro_CoExpression/output/data/3CA/Breast/common_genesets/Bcell/Bcell_reliable_coexp_df.RData")
+load("~/Pro_CoExpression/output/data/3CA/Breast/common_genesets/Endothelial/Endothelial_reliable_coexp_df.RData")
+load("~/Pro_CoExpression/output/data/3CA/Breast/common_genesets/Fibroblast/Fibroblast_reliable_coexp_df.RData")
+load("~/Pro_CoExpression/output/data/3CA/Breast/common_genesets/Macrophage/Macrophage_reliable_coexp_df.RData")
+load("~/Pro_CoExpression/output/data/3CA/Breast/common_genesets/Malignant/Malignant_reliable_coexp_df.RData")
+celltype.coexp                        <- list(Tcell_reliable_coexp_df,Bcell_reliable_coexp_df,Fibroblast_reliable_coexp_df,Endothelial_reliable_coexp_df,Macrophage_reliable_coexp_df,Malignant_reliable_coexp_df)
+library(foreach)
+BRCA.metabolism.enrich.score          <- foreach(i = celltype.coexp,.combine = cbind)%do%{
+  celltype_reliable_coexp_df           <- i 
+  celltype_metabolism_enrich_score     <- lapply(metabolism_term_genelist,get.enrich.score)
+  celltype_metabolism_enrich_score     <- unlist(celltype_metabolism_enrich_score)
+}
+saveRDS(BRCA.metabolism.enrich.score,file = "Pro_CoExpression/output/data/3CA/Breast/common_genesets/BRCA.metabolism.enrich.score.average.rds")
+
+####2.HCC####
+Tcell_tumor_liver_reliable_coexp_df    <- readRDS("~/Pro_CoExpression/output/data/3CA/Liver/common_genesets/Tcell/Tcell_tumor_liver_reliable_coexp_df.rds")
+load("~/Pro_CoExpression/output/data/3CA/Liver/common_genesets/Bcell/Bcell_tumor_Liver_reliable_coexp_df.RData")
+load("~/Pro_CoExpression/output/data/3CA/Liver/common_genesets/Endothelial/Endothelial_tumor_Liver_reliable_coexp_df.RData")
+load("~/Pro_CoExpression/output/data/3CA/Liver/common_genesets/Fibroblast/Fibroblast_tumor_Liver_reliable_coexp_df.RData")
+load("~/Pro_CoExpression/output/data/3CA/Liver/common_genesets/Macrophage/Macrophage_tumor_Liver_reliable_coexp_df.RData")
+load("~/Pro_CoExpression/output/data/3CA/Liver/common_genesets/Hepatocyte/Hepatocyte_tumor_Liver_reliable_coexp_df.RData")
+celltype.coexp                         <- list(Tcell_tumor_liver_reliable_coexp_df,Bcell_tumor_Liver_reliable_coexp_df,Fibroblast_tumor_Liver_reliable_coexp_df,Endothelial_tumor_Liver_reliable_coexp_df,Macrophage_tumor_Liver_reliable_coexp_df,Hepatocyte_tumor_Liver_reliable_coexp_df)
+library(foreach)
+HCC.metabolism.enrich.score            <- foreach(i = celltype.coexp,.combine = cbind)%do%{
+  celltype_reliable_coexp_df           <- i 
+  celltype_metabolism_enrich_score     <- lapply(metabolism_term_genelist,get.enrich.score)
+  celltype_metabolism_enrich_score     <- unlist(celltype_metabolism_enrich_score)
+}
+saveRDS(HCC.metabolism.enrich.score,file = "Pro_CoExpression/output/data/3CA/Liver/common_genesets/HCC.metabolism.enrich.score.average.rds")
+
+####3.HGSOC####
+Tcell_tumor_Ovarian_reliable_coexp_df         <- readRDS("~/Pro_CoExpression/output/data/3CA/Ovarian/common_genesets/Tcell/Tcell_tumor_Ovarian_reliable_coexp_df.rds")
+Bcell_tumor_Ovarian_reliable_coexp_df         <- readRDS("~/Pro_CoExpression/output/data/3CA/Ovarian/common_genesets/Bcell/Bcell_tumor_Ovarian_reliable_coexp_df.rds")
+Fibroblast_tumor_Ovarian_reliable_coexp_df    <- readRDS("~/Pro_CoExpression/output/data/3CA/Ovarian/common_genesets/Fibroblast/Fibroblast_tumor_Ovarian_reliable_coexp_df.rds")
+Endothelial_tumor_Ovarian_reliable_coexp_df   <- readRDS("~/Pro_CoExpression/output/data/3CA/Ovarian/common_genesets/Endothelial/Endothelial_tumor_Ovarian_reliable_coexp_df.rds")
+Macrophage_tumor_Ovarian_reliable_coexp_df    <- readRDS("~/Pro_CoExpression/output/data/3CA/Ovarian/common_genesets/Macrophage/Macrophage_tumor_Ovarian_reliable_coexp_df.rds")
+Malignant_tumor_Ovarian_reliable_coexp_df     <- readRDS("~/Pro_CoExpression/output/data/3CA/Ovarian/common_genesets/Malignant/Malignant_tumor_Ovarian_reliable_coexp_df.rds")
+celltype.coexp                                <- list(Tcell_tumor_Ovarian_reliable_coexp_df,Bcell_tumor_Ovarian_reliable_coexp_df,Fibroblast_tumor_Ovarian_reliable_coexp_df,Endothelial_tumor_Ovarian_reliable_coexp_df,Macrophage_tumor_Ovarian_reliable_coexp_df,Malignant_tumor_Ovarian_reliable_coexp_df)
+library(foreach)
+HGSOC.metabolism.enrich.score            <- foreach(i = celltype.coexp,.combine = cbind)%do%{
+  celltype_reliable_coexp_df             <- i 
+  celltype_metabolism_enrich_score       <- lapply(metabolism_term_genelist,get.enrich.score)
+  celltype_metabolism_enrich_score       <- unlist(celltype_metabolism_enrich_score)
+}
+saveRDS(HGSOC.metabolism.enrich.score,file="Pro_CoExpression/output/data/3CA/Ovarian/common_genesets/HGSOC.metabolism.enrich.score.average.rds")
+
+####4.PDAC####
+Tcell_tumor_Pancreas_reliable_coexp_df         <- readRDS("~/Pro_CoExpression/output/data/3CA/Pancreas/common_genesets/Tcell/Tcell_tumor_Pancreas_reliable_coexp_df.rds")
+Bcell_tumor_Pancreas_reliable_coexp_df         <- readRDS("~/Pro_CoExpression/output/data/3CA/Pancreas/common_genesets/Bcell/Bcell_tumor_Pancreas_reliable_coexp_df.rds")
+Fibroblast_tumor_Pancreas_reliable_coexp_df    <- readRDS("~/Pro_CoExpression/output/data/3CA/Pancreas/common_genesets/Fibroblast/Fibroblast_tumor_Pancreas_reliable_coexp_df.rds")
+Endothelial_tumor_Pancreas_reliable_coexp_df   <- readRDS("~/Pro_CoExpression/output/data/3CA/Pancreas/common_genesets/Endothelial/Endothelial_tumor_Pancreas_reliable_coexp_df.rds")
+Macrophage_tumor_Pancreas_reliable_coexp_df    <- readRDS("~/Pro_CoExpression/output/data/3CA/Pancreas/common_genesets/Macrophage/Macrophage_tumor_Pancreas_reliable_coexp_df.rds")
+Malignant_tumor_Pancreas_reliable_coexp_df     <- readRDS("~/Pro_CoExpression/output/data/3CA/Pancreas/common_genesets/Malignant/Malignant_tumor_Pancreas_reliable_coexp_df.rds")
+celltype.coexp                                 <- list(Tcell_tumor_Pancreas_reliable_coexp_df,Bcell_tumor_Pancreas_reliable_coexp_df,Fibroblast_tumor_Pancreas_reliable_coexp_df,Endothelial_tumor_Pancreas_reliable_coexp_df,Macrophage_tumor_Pancreas_reliable_coexp_df,Malignant_tumor_Pancreas_reliable_coexp_df)
+library(foreach)
+PDAC.metabolism.enrich.score             <- foreach(i = celltype.coexp,.combine = cbind)%do%{
+  celltype_reliable_coexp_df             <- i 
+  celltype_metabolism_enrich_score       <- lapply(metabolism_term_genelist,get.enrich.score)
+  celltype_metabolism_enrich_score       <- unlist(celltype_metabolism_enrich_score)
+}
+saveRDS(PDAC.metabolism.enrich.score,file="Pro_CoExpression/output/data/3CA/Pancreas/common_genesets/PDAC.metabolism.enrich.score.average.rds")
+
+####5.RCC####
+Tcell_tumor_Kidney_reliable_coexp_df         <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Tcell/Tcell_tumor_Kidney_reliable_coexp_df.rds")
+Bcell_tumor_Kidney_reliable_coexp_df         <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Bcell/Bcell_tumor_Kidney_reliable_coexp_df.rds")
+Fibroblast_tumor_Kidney_reliable_coexp_df    <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Fibroblast/Fibroblast_tumor_Kidney_reliable_coexp_df.rds")
+Endothelial_tumor_Kidney_reliable_coexp_df   <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Endothelial/Endothelial_tumor_Kidney_reliable_coexp_df.rds")
+Macrophage_tumor_Kidney_reliable_coexp_df    <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Macrophage/Macrophage_tumor_Kidney_reliable_coexp_df.rds")
+Malignant_tumor_Kidney_reliable_coexp_df     <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Malignant/Malignant_tumor_Kidney_reliable_coexp_df.rds")
+celltype.coexp                               <- list(Tcell_tumor_Kidney_reliable_coexp_df,Bcell_tumor_Kidney_reliable_coexp_df,Fibroblast_tumor_Kidney_reliable_coexp_df,Endothelial_tumor_Kidney_reliable_coexp_df,Macrophage_tumor_Kidney_reliable_coexp_df,Malignant_tumor_Kidney_reliable_coexp_df)
+library(foreach)
+RCC.metabolism.enrich.score              <- foreach(i = celltype.coexp,.combine = cbind)%do%{
+  celltype_reliable_coexp_df             <- i 
+  celltype_metabolism_enrich_score       <- lapply(metabolism_term_genelist,get.enrich.score)
+  celltype_metabolism_enrich_score       <- unlist(celltype_metabolism_enrich_score)
+}
+saveRDS(RCC.metabolism.enrich.score,file="Pro_CoExpression/output/data/3CA/Kidney/common_genesets/RCC.metabolism.enrich.score.average.rds")
+
+####draw a heatmap####
+library(tibble)
+BRCA.metabolism.enrich.score.average   <- readRDS("~/Pro_CoExpression/output/data/3CA/Breast/common_genesets/BRCA.metabolism.enrich.score.average.rds")
+HCC.metabolism.enrich.score.average    <- readRDS("~/Pro_CoExpression/output/data/3CA/Liver/common_genesets/HCC.metabolism.enrich.score.average.rds")
+RCC.metabolism.enrich.score.average    <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/common_genesets/RCC.metabolism.enrich.score.average.rds")
+HGSOC.metabolism.enrich.score.average  <- readRDS("~/Pro_CoExpression/output/data/3CA/Ovarian/common_genesets/HGSOC.metabolism.enrich.score.average.rds")
+PDAC.metabolism.enrich.score.average   <- readRDS("~/Pro_CoExpression/output/data/3CA/Pancreas/common_genesets/PDAC.metabolism.enrich.score.average.rds")
+celltype                               <- c("Tcell","Bcell","Fibroblast","Endothelial","Macrophage","Malignant")
+tumor.list                             <- list(BRCA.metabolism.enrich.score.average,HCC.metabolism.enrich.score.average,HGSOC.metabolism.enrich.score.average,PDAC.metabolism.enrich.score.average,RCC.metabolism.enrich.score.average)
+tumor.metabolism.enrich.score.average  <- Reduce(cbind,tumor.list)
+colnames(tumor.metabolism.enrich.score.average)   <- paste0("score",1:30)
+tumor.metabolism.meta                  <- data.frame(score=colnames(tumor.metabolism.enrich.score.average),
+                                                         Tumor=c(rep("Breast cancer",6),
+                                                                 rep("Liver cancer",6),
+                                                                 rep("Ovarian cancer",6),
+                                                                 rep("Pancreas cancer",6),rep("Kidney cancer",6)),
+                                                         Celltype= rep(celltype,5))
+tumor.metabolism.meta                  <- column_to_rownames(tumor.metabolism.meta,var = "score")
+saveRDS(tumor.metabolism.enrich.score.average,file = "Pro_CoExpression/output/results/data/tumor.metabolism.enrich.score.average.rds")
+saveRDS(tumor.metabolism.meta,file = "Pro_CoExpression/output/results/data/tumor.metabolism.meta.rds")
+
+library(ComplexHeatmap)
+library(circlize)
+graphics = list(
+  "Breast cancer" = function(x, y, w, h) {
+    grid.text("B", x, y, gp = gpar(col = "darkgreen"))},
+  "Liver cancer" = function(x, y, w, h) {
+    grid.text("L", x, y, gp = gpar(col = "darkgreen"))},
+  "Ovarian cancer" = function(x, y, w, h) {
+    grid.text("O", x, y, gp = gpar(col = "darkgreen"))},
+  "Pancreas cancer" = function(x, y, w, h) {
+    grid.text("P", x, y, gp = gpar(col = "darkgreen"))},
+  "Kidney cancer" = function(x, y, w, h) {
+    grid.text("K", x, y, gp = gpar(col = "darkgreen"))}
+)
+lgd = Legend(labels =c("Breast cancer","Liver cancer","Ovarian cancer","Pancreas cancer","Kidney cancer") , title = "Tumor", type = "points", 
+             pch = c("B","L","O","P","K"),legend_gp = gpar(col = "darkgreen") ,background = "white")
+col.annotation <- HeatmapAnnotation(
+  Tumor = anno_customize(tumor.metabolism.meta$Tumor, graphics = graphics),
+  Celltype=tumor.metabolism.meta$Celltype,
+  col = list(
+    Celltype=c("Tcell"="#1f77b4","Bcell"= "#2ca02c","Fibroblast"= "#d62728", "Endothelial"="#9467bd","Macrophage"= "#ff7f0e","Malignant"= "#8c564b")
+  ))
+pdf(file = "Pro_CoExpression/output/results/plot/pathway/metabolism.pathway.complexheatmap.average.pdf",width = 20,height = 15)
+#set.seed(123)
+p2 <- Heatmap(
+  tumor.metabolism.enrich.score.average,
+  name = "Coexpression",
+  col =  colorRamp2(c(-0.05, 0.01, 0.05), c("navy","white","firebrick3")),
+  cluster_rows = T,
+  cluster_columns = T,
+  show_column_names = F,
+  show_row_names = T,
+  row_names_side = c("left"),
+  clustering_method_columns = "average",
+  clustering_distance_columns = "manhattan",
+  clustering_method_rows = "average",
+  clustering_distance_rows = "manhattan",
+  show_row_dend = F,
+  top_annotation = col.annotation,
+  width = ncol(tumor.metabolism.enrich.score.average)*unit(10, "mm"), 
+  height = nrow(tumor.metabolism.enrich.score.average)*unit(4, "mm"),
+  rect_gp = gpar(col = "black", lwd = 0.1)
+)
+draw(p2,annotation_legend_list = lgd)
+dev.off()
+
+####signaling pathway####
+load("Pro_CoExpression/data/signaling_pathway_term_genelist.RData")
+get.enrich.score                   <- function(x){
+  pathway.gene                       <- x
+  celltype_pathway_coexp             <- celltype_reliable_coexp_df[celltype_reliable_coexp_df$gene1 %in% pathway.gene, ]
+  celltype_pathway_coexp             <- celltype_pathway_coexp[celltype_pathway_coexp$gene2 %in% pathway.gene,]
+  celltype_pathway_coexp             <- celltype_pathway_coexp[celltype_pathway_coexp$gene1 != celltype_pathway_coexp$gene2,]
+  gene.pair.num                      <- length(pathway.gene)*(length(pathway.gene)-1)/2
+  celltype_pathway_coexp_value       <- celltype_pathway_coexp$median_value
+  enrich.score                       <- sum(celltype_pathway_coexp_value)/gene.pair.num
+}
+
+####1.BRCA####
+load("~/Pro_CoExpression/output/data/3CA/Breast/common_genesets/Tcell/Tcell_reliable_coexp_df.RData")
+load("~/Pro_CoExpression/output/data/3CA/Breast/common_genesets/Bcell/Bcell_reliable_coexp_df.RData")
+load("~/Pro_CoExpression/output/data/3CA/Breast/common_genesets/Endothelial/Endothelial_reliable_coexp_df.RData")
+load("~/Pro_CoExpression/output/data/3CA/Breast/common_genesets/Fibroblast/Fibroblast_reliable_coexp_df.RData")
+load("~/Pro_CoExpression/output/data/3CA/Breast/common_genesets/Macrophage/Macrophage_reliable_coexp_df.RData")
+load("~/Pro_CoExpression/output/data/3CA/Breast/common_genesets/Malignant/Malignant_reliable_coexp_df.RData")
+celltype.coexp                        <- list(Tcell_reliable_coexp_df,Bcell_reliable_coexp_df,Fibroblast_reliable_coexp_df,Endothelial_reliable_coexp_df,Macrophage_reliable_coexp_df,Malignant_reliable_coexp_df)
+library(foreach)
+BRCA.signaling.enrich.score          <- foreach(i = celltype.coexp,.combine = cbind)%do%{
+  celltype_reliable_coexp_df          <- i 
+  celltype_signaling_enrich_score     <- lapply(signaling_pathway_term_genelist,get.enrich.score)
+  celltype_signaling_enrich_score     <- unlist(celltype_signaling_enrich_score)
+}
+saveRDS(BRCA.signaling.enrich.score,file = "Pro_CoExpression/output/data/3CA/Breast/common_genesets/BRCA.signaling.enrich.score.average.rds")
+
+####2.HCC####
+Tcell_tumor_liver_reliable_coexp_df    <- readRDS("~/Pro_CoExpression/output/data/3CA/Liver/common_genesets/Tcell/Tcell_tumor_liver_reliable_coexp_df.rds")
+load("~/Pro_CoExpression/output/data/3CA/Liver/common_genesets/Bcell/Bcell_tumor_Liver_reliable_coexp_df.RData")
+load("~/Pro_CoExpression/output/data/3CA/Liver/common_genesets/Endothelial/Endothelial_tumor_Liver_reliable_coexp_df.RData")
+load("~/Pro_CoExpression/output/data/3CA/Liver/common_genesets/Fibroblast/Fibroblast_tumor_Liver_reliable_coexp_df.RData")
+load("~/Pro_CoExpression/output/data/3CA/Liver/common_genesets/Macrophage/Macrophage_tumor_Liver_reliable_coexp_df.RData")
+load("~/Pro_CoExpression/output/data/3CA/Liver/common_genesets/Hepatocyte/Hepatocyte_tumor_Liver_reliable_coexp_df.RData")
+celltype.coexp                         <- list(Tcell_tumor_liver_reliable_coexp_df,Bcell_tumor_Liver_reliable_coexp_df,Fibroblast_tumor_Liver_reliable_coexp_df,Endothelial_tumor_Liver_reliable_coexp_df,Macrophage_tumor_Liver_reliable_coexp_df,Hepatocyte_tumor_Liver_reliable_coexp_df)
+library(foreach)
+HCC.signaling.enrich.score            <- foreach(i = celltype.coexp,.combine = cbind)%do%{
+  celltype_reliable_coexp_df           <- i 
+  celltype_signaling_enrich_score     <- lapply(signaling_pathway_term_genelist,get.enrich.score)
+  celltype_signaling_enrich_score     <- unlist(celltype_signaling_enrich_score)
+}
+saveRDS(HCC.signaling.enrich.score,file = "Pro_CoExpression/output/data/3CA/Liver/common_genesets/HCC.signaling.enrich.score.average.rds")
+
+####3.HGSOC####
+Tcell_tumor_Ovarian_reliable_coexp_df         <- readRDS("~/Pro_CoExpression/output/data/3CA/Ovarian/common_genesets/Tcell/Tcell_tumor_Ovarian_reliable_coexp_df.rds")
+Bcell_tumor_Ovarian_reliable_coexp_df         <- readRDS("~/Pro_CoExpression/output/data/3CA/Ovarian/common_genesets/Bcell/Bcell_tumor_Ovarian_reliable_coexp_df.rds")
+Fibroblast_tumor_Ovarian_reliable_coexp_df    <- readRDS("~/Pro_CoExpression/output/data/3CA/Ovarian/common_genesets/Fibroblast/Fibroblast_tumor_Ovarian_reliable_coexp_df.rds")
+Endothelial_tumor_Ovarian_reliable_coexp_df   <- readRDS("~/Pro_CoExpression/output/data/3CA/Ovarian/common_genesets/Endothelial/Endothelial_tumor_Ovarian_reliable_coexp_df.rds")
+Macrophage_tumor_Ovarian_reliable_coexp_df    <- readRDS("~/Pro_CoExpression/output/data/3CA/Ovarian/common_genesets/Macrophage/Macrophage_tumor_Ovarian_reliable_coexp_df.rds")
+Malignant_tumor_Ovarian_reliable_coexp_df     <- readRDS("~/Pro_CoExpression/output/data/3CA/Ovarian/common_genesets/Malignant/Malignant_tumor_Ovarian_reliable_coexp_df.rds")
+celltype.coexp                                <- list(Tcell_tumor_Ovarian_reliable_coexp_df,Bcell_tumor_Ovarian_reliable_coexp_df,Fibroblast_tumor_Ovarian_reliable_coexp_df,Endothelial_tumor_Ovarian_reliable_coexp_df,Macrophage_tumor_Ovarian_reliable_coexp_df,Malignant_tumor_Ovarian_reliable_coexp_df)
+library(foreach)
+HGSOC.signaling.enrich.score            <- foreach(i = celltype.coexp,.combine = cbind)%do%{
+  celltype_reliable_coexp_df             <- i 
+  celltype_signaling_enrich_score       <- lapply(signaling_pathway_term_genelist,get.enrich.score)
+  celltype_signaling_enrich_score       <- unlist(celltype_signaling_enrich_score)
+}
+saveRDS(HGSOC.signaling.enrich.score,file="Pro_CoExpression/output/data/3CA/Ovarian/common_genesets/HGSOC.signaling.enrich.score.average.rds")
+
+####4.PDAC####
+Tcell_tumor_Pancreas_reliable_coexp_df         <- readRDS("~/Pro_CoExpression/output/data/3CA/Pancreas/common_genesets/Tcell/Tcell_tumor_Pancreas_reliable_coexp_df.rds")
+Bcell_tumor_Pancreas_reliable_coexp_df         <- readRDS("~/Pro_CoExpression/output/data/3CA/Pancreas/common_genesets/Bcell/Bcell_tumor_Pancreas_reliable_coexp_df.rds")
+Fibroblast_tumor_Pancreas_reliable_coexp_df    <- readRDS("~/Pro_CoExpression/output/data/3CA/Pancreas/common_genesets/Fibroblast/Fibroblast_tumor_Pancreas_reliable_coexp_df.rds")
+Endothelial_tumor_Pancreas_reliable_coexp_df   <- readRDS("~/Pro_CoExpression/output/data/3CA/Pancreas/common_genesets/Endothelial/Endothelial_tumor_Pancreas_reliable_coexp_df.rds")
+Macrophage_tumor_Pancreas_reliable_coexp_df    <- readRDS("~/Pro_CoExpression/output/data/3CA/Pancreas/common_genesets/Macrophage/Macrophage_tumor_Pancreas_reliable_coexp_df.rds")
+Malignant_tumor_Pancreas_reliable_coexp_df     <- readRDS("~/Pro_CoExpression/output/data/3CA/Pancreas/common_genesets/Malignant/Malignant_tumor_Pancreas_reliable_coexp_df.rds")
+celltype.coexp                                 <- list(Tcell_tumor_Pancreas_reliable_coexp_df,Bcell_tumor_Pancreas_reliable_coexp_df,Fibroblast_tumor_Pancreas_reliable_coexp_df,Endothelial_tumor_Pancreas_reliable_coexp_df,Macrophage_tumor_Pancreas_reliable_coexp_df,Malignant_tumor_Pancreas_reliable_coexp_df)
+library(foreach)
+PDAC.signaling.enrich.score             <- foreach(i = celltype.coexp,.combine = cbind)%do%{
+  celltype_reliable_coexp_df            <- i 
+  celltype_signaling_enrich_score       <- lapply(signaling_pathway_term_genelist,get.enrich.score)
+  celltype_signaling_enrich_score       <- unlist(celltype_signaling_enrich_score)
+}
+saveRDS(PDAC.signaling.enrich.score,file="Pro_CoExpression/output/data/3CA/Pancreas/common_genesets/PDAC.signaling.enrich.score.average.rds")
+
+####5.RCC####
+Tcell_tumor_Kidney_reliable_coexp_df         <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Tcell/Tcell_tumor_Kidney_reliable_coexp_df.rds")
+Bcell_tumor_Kidney_reliable_coexp_df         <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Bcell/Bcell_tumor_Kidney_reliable_coexp_df.rds")
+Fibroblast_tumor_Kidney_reliable_coexp_df    <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Fibroblast/Fibroblast_tumor_Kidney_reliable_coexp_df.rds")
+Endothelial_tumor_Kidney_reliable_coexp_df   <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Endothelial/Endothelial_tumor_Kidney_reliable_coexp_df.rds")
+Macrophage_tumor_Kidney_reliable_coexp_df    <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Macrophage/Macrophage_tumor_Kidney_reliable_coexp_df.rds")
+Malignant_tumor_Kidney_reliable_coexp_df     <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Malignant/Malignant_tumor_Kidney_reliable_coexp_df.rds")
+celltype.coexp                               <- list(Tcell_tumor_Kidney_reliable_coexp_df,Bcell_tumor_Kidney_reliable_coexp_df,Fibroblast_tumor_Kidney_reliable_coexp_df,Endothelial_tumor_Kidney_reliable_coexp_df,Macrophage_tumor_Kidney_reliable_coexp_df,Malignant_tumor_Kidney_reliable_coexp_df)
+library(foreach)
+RCC.signaling.enrich.score              <- foreach(i = celltype.coexp,.combine = cbind)%do%{
+  celltype_reliable_coexp_df            <- i 
+  celltype_signaling_enrich_score       <- lapply(signaling_pathway_term_genelist,get.enrich.score)
+  celltype_signaling_enrich_score       <- unlist(celltype_signaling_enrich_score)
+}
+saveRDS(RCC.signaling.enrich.score,file="Pro_CoExpression/output/data/3CA/Kidney/common_genesets/RCC.signaling.enrich.score.average.rds")
+
+
+library(tibble)
+BRCA.signaling.enrich.score.average  <- readRDS("~/Pro_CoExpression/output/data/3CA/Breast/common_genesets/BRCA.signaling.enrich.score.average.rds")
+RCC.signaling.enrich.score.average   <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/common_genesets/RCC.signaling.enrich.score.average.rds")
+HCC.signaling.enrich.score.average   <- readRDS("~/Pro_CoExpression/output/data/3CA/Liver/common_genesets/HCC.signaling.enrich.score.average.rds")
+HGSOC.signaling.enrich.score.average <- readRDS("~/Pro_CoExpression/output/data/3CA/Ovarian/common_genesets/HGSOC.signaling.enrich.score.average.rds")
+PDAC.signaling.enrich.score.average  <- readRDS("~/Pro_CoExpression/output/data/3CA/Pancreas/common_genesets/PDAC.signaling.enrich.score.average.rds")
+celltype                             <- c("Tcell","Bcell","Fibroblast","Endothelial","Macrophage","Malignant")
+tumor.list                           <- list(BRCA.signaling.enrich.score.average,HCC.signaling.enrich.score.average,HGSOC.signaling.enrich.score.average,PDAC.signaling.enrich.score.average,RCC.signaling.enrich.score.average)
+tumor.signaling.enrich.score.average           <- Reduce(cbind,tumor.list)
+colnames(tumor.signaling.enrich.score.average) <- paste0("score",1:30)
+tumor.signaling.meta                      <- data.frame(score=colnames(tumor.signaling.enrich.score.average),
+                                                        Tumor=c(rep("Breast cancer",6),
+                                                                rep("Liver cancer",6),
+                                                                rep("Ovarian cancer",6),
+                                                                rep("Pancreas cancer",6),rep("Kidney cancer",6)),
+                                                        Celltype= rep(celltype,5))
+tumor.signaling.meta           <- column_to_rownames(tumor.signaling.meta,var = "score")
+saveRDS(tumor.signaling.enrich.score.average,file = "Pro_CoExpression/output/results/data/tumor.signaling.enrich.score.average.rds")
+saveRDS(tumor.signaling.meta,file = "Pro_CoExpression/output/results/data/tumor.signaling.meta.rds")
