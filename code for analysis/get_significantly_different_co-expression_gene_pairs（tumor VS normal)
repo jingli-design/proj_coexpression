@@ -1,0 +1,355 @@
+##############################################################################
+####get significantly different co-expression gene pairs（tumor VS normal)####
+##############################################################################
+
+
+####BRCA####
+####1. Fibroblast####
+load("~/Pro_CoExpression/output/data/3CA/Breast/common_genesets/Fibroblast/Fibroblast_reliable_coexp_df.RData")
+Fibroblast_normal_reliable_coexp_df      <- readRDS("~/Pro_CoExpression/output/data/3CA/Breast/common_genesets/Fibroblast/Fibroblast_normal_reliable_coexp_df.rds")
+Fibroblast_diff                          <- merge(Fibroblast_reliable_coexp_df,Fibroblast_normal_reliable_coexp_df,by=c("gene1","gene2"),all = T)
+Fibroblast_diff                          <- Fibroblast_diff[,c(1,2,4,7)]
+colnames(Fibroblast_diff)[3:4]           <- c("tumor","normal")
+Fibroblast_diff[is.na(Fibroblast_diff)]  <-  0
+Fibroblast_diff$diff                     <- Fibroblast_diff$tumor - Fibroblast_diff$normal
+Fibroblast_diff                          <- Fibroblast_diff[Fibroblast_diff$gene1 != Fibroblast_diff$gene2,]
+
+boxplot(Fibroblast_diff$diff)
+Q1                       <- quantile(Fibroblast_diff$diff, 0.25)
+Q3                       <- quantile(Fibroblast_diff$diff, 0.75)
+IQR                      <- Q3 - Q1
+threshold1               <- Q3 + 1.5 * IQR #0.841
+threshold2               <- Q1 - 1.5 * IQR#-0.838
+Fibroblast_diff_coexp_df     <- Fibroblast_diff[Fibroblast_diff$diff > threshold1|
+                                                  Fibroblast_diff$diff < threshold2, ]
+BRCA_Fibroblast_sigdiff_coexp_df       <- Fibroblast_diff_coexp_df[Fibroblast_diff_coexp_df$gene1 != Fibroblast_diff_coexp_df$gene2,]
+saveRDS(BRCA_Fibroblast_sigdiff_coexp_df,file = "Pro_CoExpression/output/data/3CA/Breast/common_genesets/Fibroblast/BRCA_Fibroblast_sigdiff_coexp_df.rds")
+####2. Epithelial####
+load("~/Pro_CoExpression/output/data/3CA/Breast/common_genesets/Malignant/Malignant_reliable_coexp_df.RData")
+Epithelial_normal_reliable_coexp_df     <- readRDS("~/Pro_CoExpression/output/data/3CA/Breast/common_genesets/Malignant/Epithelial_normal_reliable_coexp_df.rds")
+Malignant_diff                          <- merge(Malignant_reliable_coexp_df,Epithelial_normal_reliable_coexp_df,by=c("gene1","gene2"),all = T)
+Malignant_diff                          <- Malignant_diff[,c(1,2,4,7)]
+colnames(Malignant_diff)[3:4]           <- c("tumor","normal")
+Malignant_diff[is.na(Malignant_diff)]   <-  0
+Malignant_diff$diff                     <- Malignant_diff$tumor - Malignant_diff$normal
+Malignant_diff                          <- Malignant_diff[Malignant_diff$gene1 != Malignant_diff$gene2,]
+boxplot(Malignant_diff$diff)
+Q1                       <- quantile(Malignant_diff$diff, 0.25)
+Q3                       <- quantile(Malignant_diff$diff, 0.75)
+IQR                      <- Q3 - Q1
+threshold1               <- Q3 + 1.5 * IQR #1.16
+threshold2               <- Q1 - 1.5 * IQR#-1.14
+Malignant_diff_coexp_df               <- Malignant_diff[Malignant_diff$diff > threshold1|
+                                                          Malignant_diff$diff < threshold2, ]
+BRCA_Malignant_sigdiff_coexp_df       <- Malignant_diff_coexp_df[Malignant_diff_coexp_df$gene1 != Malignant_diff_coexp_df$gene2,]
+saveRDS(BRCA_Malignant_sigdiff_coexp_df,file = "Pro_CoExpression/output/data/3CA/Breast/common_genesets/Malignant/BRCA_Malignant_sigdiff_coexp_df.rds")
+####HCC####
+####1.Tcell####
+load("~/Pro_CoExpression/output/data/3CA/Liver/common_genesets/Tcell/Tcell_normal_Liver_reliable_coexp_df.RData")
+Tcell_tumor_liver_reliable_coexp_df    <- readRDS("~/Pro_CoExpression/output/data/3CA/Liver/common_genesets/Tcell/Tcell_tumor_liver_reliable_coexp_df.rds")
+Tcell_diff                          <- merge(Tcell_tumor_liver_reliable_coexp_df,Tcell_normal_Liver_reliable_coexp_df,by=c("gene1","gene2"),all = T)
+Tcell_diff                          <- Tcell_diff[,c(1,2,4,6)]
+colnames(Tcell_diff)[3:4]           <- c("tumor","normal")
+Tcell_diff[is.na(Tcell_diff)]       <-  0
+Tcell_diff$diff                     <- Tcell_diff$tumor - Tcell_diff$normal
+Tcell_diff                          <- Tcell_diff[Tcell_diff$gene1 != Tcell_diff$gene2,]
+boxplot(Tcell_diff$diff)
+Q1                       <- quantile(Tcell_diff$diff, 0.25)
+Q3                       <- quantile(Tcell_diff$diff, 0.75)
+IQR                      <- Q3 - Q1
+threshold1               <- Q3 + 1.5 * IQR #0.413
+threshold2               <- Q1 - 1.5 * IQR#-0.377
+Tcell_diff_coexp_df     <- Tcell_diff[Tcell_diff$diff > threshold1|
+                                        Tcell_diff$diff < threshold2, ]
+HCC_Tcell_sigdiff_coexp_df       <- Tcell_diff_coexp_df[Tcell_diff_coexp_df$gene1 != Tcell_diff_coexp_df$gene2,]
+saveRDS(HCC_Tcell_sigdiff_coexp_df,file = "Pro_CoExpression/output/data/3CA/Liver/common_genesets/Tcell/HCC_Tcell_sigdiff_coexp_df.rds")
+####2.Bcell####
+load("~/Pro_CoExpression/output/data/3CA/Liver/common_genesets/Bcell/Bcell_normal_Liver_reliable_coexp_df.RData")
+load("~/Pro_CoExpression/output/data/3CA/Liver/common_genesets/Bcell/Bcell_tumor_Liver_reliable_coexp_df.RData")
+Bcell_diff                          <- merge(Bcell_tumor_Liver_reliable_coexp_df,Bcell_normal_Liver_reliable_coexp_df,by=c("gene1","gene2"),all = T)
+Bcell_diff                          <- Bcell_diff[,c(1,2,4,6)]
+colnames(Bcell_diff)[3:4]           <- c("tumor","normal")
+Bcell_diff[is.na(Bcell_diff)]       <-  0
+Bcell_diff$diff                     <- Bcell_diff$tumor - Bcell_diff$normal
+Bcell_diff                          <- Bcell_diff[Bcell_diff$gene1 != Bcell_diff$gene2,]
+boxplot(Bcell_diff$diff)
+Q1                       <- quantile(Bcell_diff$diff, 0.25)
+Q3                       <- quantile(Bcell_diff$diff, 0.75)
+IQR                      <- Q3 - Q1
+threshold1               <- Q3 + 1.5 * IQR #1.75
+threshold2               <- Q1 - 1.5 * IQR#-0.25
+Bcell_diff_coexp_df     <- Bcell_diff[Bcell_diff$diff > threshold1|
+                                        Bcell_diff$diff < threshold2, ]
+HCC_Bcell_sigdiff_coexp_df       <- Bcell_diff_coexp_df[Bcell_diff_coexp_df$gene1 != Bcell_diff_coexp_df$gene2,]
+saveRDS(HCC_Bcell_sigdiff_coexp_df,file = "Pro_CoExpression/output/data/3CA/Liver/common_genesets/Bcell/HCC_Bcell_sigdiff_coexp_df.rds")
+
+####3.Fibroblast####
+Fibroblast_normal_liver_reliable_coexp_df <- readRDS("~/Pro_CoExpression/output/data/3CA/Liver/common_genesets/Fibroblast/Fibroblast_normal_liver_reliable_coexp_df.rds")
+load("~/Pro_CoExpression/output/data/3CA/Liver/common_genesets/Fibroblast/Fibroblast_tumor_Liver_reliable_coexp_df.RData")
+Fibroblast_diff                          <- merge(Fibroblast_tumor_Liver_reliable_coexp_df,Fibroblast_normal_liver_reliable_coexp_df,by=c("gene1","gene2"),all = T)
+Fibroblast_diff                          <- Fibroblast_diff[,c(1,2,4,7)]
+colnames(Fibroblast_diff)[3:4]           <- c("tumor","normal")
+Fibroblast_diff[is.na(Fibroblast_diff)]  <-  0
+Fibroblast_diff$diff                     <- Fibroblast_diff$tumor - Fibroblast_diff$normal
+Fibroblast_diff                          <- Fibroblast_diff[Fibroblast_diff$gene1 !=Fibroblast_diff$gene2,]
+boxplot(Fibroblast_diff$diff)
+Q1                       <- quantile(Fibroblast_diff$diff, 0.25)
+Q3                       <- quantile(Fibroblast_diff$diff, 0.75)
+IQR                      <- Q3 - Q1
+threshold1               <- Q3 + 1.5 * IQR #1.01
+threshold2               <- Q1 - 1.5 * IQR#-0.853
+Fibroblast_diff_coexp_df     <- Fibroblast_diff[Fibroblast_diff$diff > threshold1|
+                                                  Fibroblast_diff$diff < threshold2, ]
+HCC_Fibroblast_sigdiff_coexp_df       <- Fibroblast_diff_coexp_df[Fibroblast_diff_coexp_df$gene1 != Fibroblast_diff_coexp_df$gene2,]
+saveRDS(HCC_Fibroblast_sigdiff_coexp_df,file = "Pro_CoExpression/output/data/3CA/Liver/common_genesets/Fibroblast/HCC_Fibroblast_sigdiff_coexp_df.rds")
+
+####4.Endothelial####
+Endothelial_normal_liver_reliable_coexp_df <- readRDS("~/Pro_CoExpression/output/data/3CA/Liver/common_genesets/Endothelial/Endothelial_normal_liver_reliable_coexp_df.rds")
+load("~/Pro_CoExpression/output/data/3CA/Liver/common_genesets/Endothelial/Endothelial_tumor_Liver_reliable_coexp_df.RData")
+Endothelial_diff                          <- merge(Endothelial_tumor_Liver_reliable_coexp_df,Endothelial_normal_liver_reliable_coexp_df,by=c("gene1","gene2"),all = T)
+Endothelial_diff                          <- Endothelial_diff[,c(1,2,4,7)]
+colnames(Endothelial_diff)[3:4]           <- c("tumor","normal")
+Endothelial_diff[is.na(Endothelial_diff)]  <-  0
+Endothelial_diff$diff                     <- Endothelial_diff$tumor - Endothelial_diff$normal
+Endothelial_diff                          <- Endothelial_diff[Endothelial_diff$gene1 !=Endothelial_diff$gene2,]
+
+boxplot(Endothelial_diff$diff)
+Q1                       <- quantile(Endothelial_diff$diff, 0.25)
+Q3                       <- quantile(Endothelial_diff$diff, 0.75)
+IQR                      <- Q3 - Q1
+threshold1               <- Q3 + 1.5 * IQR #0.748
+threshold2               <- Q1 - 1.5 * IQR#-0.755
+Endothelial_diff_coexp_df              <- Endothelial_diff[Endothelial_diff$diff > threshold1|
+                                                             Endothelial_diff$diff < threshold2, ]
+HCC_Endothelial_sigdiff_coexp_df       <- Endothelial_diff_coexp_df[Endothelial_diff_coexp_df$gene1 != Endothelial_diff_coexp_df$gene2,]
+saveRDS(HCC_Endothelial_sigdiff_coexp_df,file = "Pro_CoExpression/output/data/3CA/Liver/common_genesets/Endothelial/HCC_Endothelial_sigdiff_coexp_df.rds")
+
+####5.Macrophage :1####
+load("~/Pro_CoExpression/output/data/3CA/Liver/common_genesets/Macrophage/Macrophage_tumor_Liver_reliable_coexp_df.RData")
+Macrophage_normal_liver_reliable_coexp_df <- readRDS("~/Pro_CoExpression/output/data/3CA/Liver/common_genesets/Macrophage/Macrophage_normal_liver_reliable_coexp_df.rds")
+Macrophage_diff                          <- merge(Macrophage_tumor_Liver_reliable_coexp_df,Macrophage_normal_liver_reliable_coexp_df,by=c("gene1","gene2"),all = T)
+Macrophage_diff                          <- Macrophage_diff[,c(1,2,4,7)]
+colnames(Macrophage_diff)[3:4]           <- c("tumor","normal")
+Macrophage_diff[is.na(Macrophage_diff)]  <-  0
+Macrophage_diff$diff                     <- Macrophage_diff$tumor - Macrophage_diff$normal
+Macrophage_diff                          <- Macrophage_diff[Macrophage_diff$gene1 !=Macrophage_diff$gene2,]
+boxplot(Macrophage_diff$diff)
+Q1                       <- quantile(Macrophage_diff$diff, 0.25)
+Q3                       <- quantile(Macrophage_diff$diff, 0.75)
+IQR                      <- Q3 - Q1
+threshold1               <- Q3 + 1.5 * IQR #1.6
+threshold2               <- Q1 - 1.5 * IQR#-1.33
+Macrophage_diff_coexp_df     <- Macrophage_diff[Macrophage_diff$diff > threshold1|
+                                                  Macrophage_diff$diff < threshold2, ]
+HCC_Macrophage_sigdiff_coexp_df       <- Macrophage_diff_coexp_df[Macrophage_diff_coexp_df$gene1 != Macrophage_diff_coexp_df$gene2,]
+saveRDS(HCC_Macrophage_sigdiff_coexp_df,file = "Pro_CoExpression/output/data/3CA/Liver/common_genesets/Macrophage/HCC_Macrophage_sigdiff_coexp_df.rds")
+#1
+####6.Hepatocyte :0####
+Hepatocyte_normal_liver_reliable_coexp_df <- readRDS("~/Pro_CoExpression/output/data/3CA/Liver/common_genesets/Hepatocyte/Hepatocyte_normal_liver_reliable_coexp_df.rds")
+load("~/Pro_CoExpression/output/data/3CA/Liver/common_genesets/Hepatocyte/Hepatocyte_tumor_Liver_reliable_coexp_df.RData")
+Hepatocyte_diff                          <- merge(Hepatocyte_tumor_Liver_reliable_coexp_df,Hepatocyte_normal_liver_reliable_coexp_df,by=c("gene1","gene2"),all = T)
+Hepatocyte_diff                          <- Hepatocyte_diff[,c(1,2,4,7)]
+colnames(Hepatocyte_diff)[3:4]           <- c("tumor","normal")
+Hepatocyte_diff[is.na(Hepatocyte_diff)]  <-  0
+Hepatocyte_diff$diff                     <- Hepatocyte_diff$tumor - Hepatocyte_diff$normal
+Hepatocyte_diff                          <- Hepatocyte_diff[Hepatocyte_diff$gene1 !=Hepatocyte_diff$gene2,]
+
+boxplot(Hepatocyte_diff$diff)
+Q1                       <- quantile(Hepatocyte_diff$diff, 0.25)
+Q3                       <- quantile(Hepatocyte_diff$diff, 0.75)
+IQR                      <- Q3 - Q1
+threshold1               <- Q3 + 1.5 * IQR #2.77
+threshold2               <- Q1 - 1.5 * IQR#-2.6
+Hepatocyte_diff_coexp_df     <- Hepatocyte_diff[Hepatocyte_diff$diff > threshold1|
+                                                  Hepatocyte_diff$diff < threshold2, ]
+HCC_Hepatocyte_sigdiff_coexp_df       <- Hepatocyte_diff_coexp_df[Hepatocyte_diff_coexp_df$gene1 != Hepatocyte_diff_coexp_df$gene2,]
+saveRDS(HCC_Hepatocyte_sigdiff_coexp_df,file = "Pro_CoExpression/output/data/3CA/Liver/common_genesets/Hepatocyte/HCC_Hepatocyte_sigdiff_coexp_df.rds")
+#0
+
+
+####HGSOC####
+####1.Tcell：0####
+Tcell_normal_Ovarian_reliable_coexp_df <- readRDS("~/Pro_CoExpression/output/data/3CA/Ovarian/common_genesets/Tcell/Tcell_normal_Ovarian_reliable_coexp_df.rds")
+Tcell_tumor_Ovarian_reliable_coexp_df <- readRDS("~/Pro_CoExpression/output/data/3CA/Ovarian/common_genesets/Tcell/Tcell_tumor_Ovarian_reliable_coexp_df.rds")
+Tcell_diff                          <- merge(Tcell_tumor_Ovarian_reliable_coexp_df,Tcell_normal_Ovarian_reliable_coexp_df,by=c("gene1","gene2"),all = T)
+Tcell_diff                          <- Tcell_diff[,c(1,2,4,7)]
+colnames(Tcell_diff)[3:4]           <- c("tumor","normal")
+Tcell_diff[is.na(Tcell_diff)]  <-  0
+Tcell_diff$diff                     <- Tcell_diff$tumor - Tcell_diff$normal
+Tcell_diff                          <- Tcell_diff[Tcell_diff$gene1 != Tcell_diff$gene2,]
+boxplot(Tcell_diff$diff)
+Q1                       <- quantile(Tcell_diff$diff, 0.25)
+Q3                       <- quantile(Tcell_diff$diff, 0.75)
+IQR                      <- Q3 - Q1
+threshold1               <- Q3 + 1.5 * IQR #2.21
+threshold2               <- Q1 - 1.5 * IQR#-2.12
+Tcell_diff_coexp_df     <- Tcell_diff[Tcell_diff$diff > threshold1|
+                                        Tcell_diff$diff < threshold2, ]
+HGSOC_Tcell_sigdiff_coexp_df       <- Tcell_diff_coexp_df[Tcell_diff_coexp_df$gene1 != Tcell_diff_coexp_df$gene2,]
+saveRDS(HGSOC_Tcell_sigdiff_coexp_df,file = "Pro_CoExpression/output/data/3CA/Ovarian/common_genesets/Tcell/HGSOC_Tcell_sigdiff_coexp_df.rds")
+#0
+
+####2.Endothelial####
+Endothelial_normal_Ovarian_reliable_coexp_df <- readRDS("~/Pro_CoExpression/output/data/3CA/Ovarian/common_genesets/Endothelial/Endothelial_normal_Ovarian_reliable_coexp_df.rds")
+Endothelial_tumor_Ovarian_reliable_coexp_df <- readRDS("~/Pro_CoExpression/output/data/3CA/Ovarian/common_genesets/Endothelial/Endothelial_tumor_Ovarian_reliable_coexp_df.rds")
+Endothelial_diff                          <- merge(Endothelial_tumor_Ovarian_reliable_coexp_df,Endothelial_normal_Ovarian_reliable_coexp_df,by=c("gene1","gene2"),all = T)
+Endothelial_diff                          <- Endothelial_diff[,c(1,2,4,7)]
+colnames(Endothelial_diff)[3:4]           <- c("tumor","normal")
+Endothelial_diff[is.na(Endothelial_diff)]       <-  0
+Endothelial_diff$diff                     <- Endothelial_diff$tumor - Endothelial_diff$normal
+Endothelial_diff                          <- Endothelial_diff[Endothelial_diff$gene1 != Endothelial_diff$gene2,]
+boxplot(Endothelial_diff$diff)
+Q1                       <- quantile(Endothelial_diff$diff, 0.25)
+Q3                       <- quantile(Endothelial_diff$diff, 0.75)
+IQR                      <- Q3 - Q1
+threshold1               <- Q3 + 1.5 * IQR #0.832
+threshold2               <- Q1 - 1.5 * IQR#-0.723
+Endothelial_diff_coexp_df     <- Endothelial_diff[Endothelial_diff$diff > threshold1|
+                                                    Endothelial_diff$diff < threshold2, ]
+HGSOC_Endothelial_sigdiff_coexp_df       <- Endothelial_diff_coexp_df[Endothelial_diff_coexp_df$gene1 != Endothelial_diff_coexp_df$gene2,]
+saveRDS(HGSOC_Endothelial_sigdiff_coexp_df,file = "Pro_CoExpression/output/data/3CA/Ovarian/common_genesets/Endothelial/HGSOC_Endothelial_sigdiff_coexp_df.rds")
+
+
+####3. Macrophage####
+Macrophage_normal_Ovarian_reliable_coexp_df <- readRDS("~/Pro_CoExpression/output/data/3CA/Ovarian/common_genesets/Macrophage/Macrophage_normal_Ovarian_reliable_coexp_df.rds")
+Macrophage_tumor_Ovarian_reliable_coexp_df <- readRDS("~/Pro_CoExpression/output/data/3CA/Ovarian/common_genesets/Macrophage/Macrophage_tumor_Ovarian_reliable_coexp_df.rds")
+Macrophage_diff                          <- merge(Macrophage_tumor_Ovarian_reliable_coexp_df,Macrophage_normal_Ovarian_reliable_coexp_df,by=c("gene1","gene2"),all = T)
+Macrophage_diff                          <- Macrophage_diff[,c(1,2,4,7)]
+colnames(Macrophage_diff)[3:4]           <- c("tumor","normal")
+Macrophage_diff[is.na(Macrophage_diff)]       <-  0
+Macrophage_diff$diff                     <- Macrophage_diff$tumor - Macrophage_diff$normal
+Macrophage_diff                          <- Macrophage_diff[Macrophage_diff$gene1 != Macrophage_diff$gene2,]
+boxplot(Macrophage_diff$diff)
+Q1                       <- quantile(Macrophage_diff$diff, 0.25)
+Q3                       <- quantile(Macrophage_diff$diff, 0.75)
+IQR                      <- Q3 - Q1
+threshold1               <- Q3 + 1.5 * IQR #0.473
+threshold2               <- Q1 - 1.5 * IQR#-0.323
+Macrophage_diff_coexp_df     <- Macrophage_diff[Macrophage_diff$diff > threshold1|
+                                                  Macrophage_diff$diff < threshold2, ]
+HGSOC_Macrophage_sigdiff_coexp_df       <- Macrophage_diff_coexp_df[Macrophage_diff_coexp_df$gene1 != Macrophage_diff_coexp_df$gene2,]
+saveRDS(HGSOC_Macrophage_sigdiff_coexp_df,file = "Pro_CoExpression/output/data/3CA/Ovarian/common_genesets/Macrophage/HGSOC_Macrophage_sigdiff_coexp_df.rds")
+
+####RCC####
+####1.Tcell####
+Tcell_normal_Kidney_reliable_coexp_df <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Tcell/Tcell_normal_Kidney_reliable_coexp_df.rds")
+Tcell_tumor_Kidney_reliable_coexp_df <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Tcell/Tcell_tumor_Kidney_reliable_coexp_df.rds")
+Tcell_diff                          <- merge(Tcell_tumor_Kidney_reliable_coexp_df,Tcell_normal_Kidney_reliable_coexp_df,by=c("gene1","gene2"),all = T)
+Tcell_diff                          <- Tcell_diff[,c(1,2,4,6)]
+colnames(Tcell_diff)[3:4]           <- c("tumor","normal")
+Tcell_diff[is.na(Tcell_diff)]       <-  0
+Tcell_diff$diff                     <- Tcell_diff$tumor - Tcell_diff$normal
+Tcell_diff                          <- Tcell_diff[Tcell_diff$gene1 != Tcell_diff$gene2,]
+boxplot(Tcell_diff$diff)
+Q1                       <- quantile(Tcell_diff$diff, 0.25)
+Q3                       <- quantile(Tcell_diff$diff, 0.75)
+IQR                      <- Q3 - Q1
+threshold1               <- Q3 + 1.5 * IQR #0.721
+threshold2               <- Q1 - 1.5 * IQR#-0.678
+Tcell_diff_coexp_df     <- Tcell_diff[Tcell_diff$diff > threshold1|
+                                        Tcell_diff$diff < threshold2, ]
+RCC_Tcell_sigdiff_coexp_df       <- Tcell_diff_coexp_df[Tcell_diff_coexp_df$gene1 != Tcell_diff_coexp_df$gene2,]
+saveRDS(RCC_Tcell_sigdiff_coexp_df,file = "Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Tcell/RCC_Tcell_sigdiff_coexp_df.rds")
+
+
+####2.Bcell####
+Bcell_normal_Kidney_reliable_coexp_df <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Bcell/Bcell_normal_Kidney_reliable_coexp_df.rds")
+Bcell_tumor_Kidney_reliable_coexp_df <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Bcell/Bcell_tumor_Kidney_reliable_coexp_df.rds")
+Bcell_diff                          <- merge(Bcell_tumor_Kidney_reliable_coexp_df,Bcell_normal_Kidney_reliable_coexp_df,by=c("gene1","gene2"),all = T)
+Bcell_diff                          <- Bcell_diff[,c(1,2,4,6)]
+colnames(Bcell_diff)[3:4]           <- c("tumor","normal")
+Bcell_diff[is.na(Bcell_diff)]       <-  0
+Bcell_diff$diff                     <- Bcell_diff$tumor - Bcell_diff$normal
+Bcell_diff                          <- Bcell_diff[Bcell_diff$gene1 != Bcell_diff$gene2,]
+boxplot(Bcell_diff$diff)
+Q1                       <- quantile(Bcell_diff$diff, 0.25)
+Q3                       <- quantile(Bcell_diff$diff, 0.75)
+IQR                      <- Q3 - Q1
+threshold1               <- Q3 + 1.5 * IQR #0.174
+threshold2               <- Q1 - 1.5 * IQR#-0.904
+Bcell_diff_coexp_df     <- Bcell_diff[Bcell_diff$diff > threshold1|
+                                        Bcell_diff$diff < threshold2, ]
+RCC_Bcell_sigdiff_coexp_df       <- Bcell_diff_coexp_df[Bcell_diff_coexp_df$gene1 != Bcell_diff_coexp_df$gene2,]
+saveRDS(RCC_Bcell_sigdiff_coexp_df,file = "Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Bcell/RCC_Bcell_sigdiff_coexp_df.rds")
+
+####3.Fibroblast####
+Fibroblast_normal_Kidney_reliable_coexp_df <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Fibroblast/Fibroblast_normal_Kidney_reliable_coexp_df.rds")
+Fibroblast_tumor_Kidney_reliable_coexp_df <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Fibroblast/Fibroblast_tumor_Kidney_reliable_coexp_df.rds")
+Fibroblast_diff                          <- merge(Fibroblast_tumor_Kidney_reliable_coexp_df,Fibroblast_normal_Kidney_reliable_coexp_df,by=c("gene1","gene2"),all = T)
+Fibroblast_diff                          <- Fibroblast_diff[,c(1,2,4,7)]
+colnames(Fibroblast_diff)[3:4]           <- c("tumor","normal")
+Fibroblast_diff[is.na(Fibroblast_diff)]       <-  0
+Fibroblast_diff$diff                     <- Fibroblast_diff$tumor - Fibroblast_diff$normal
+Fibroblast_diff                          <- Fibroblast_diff[Fibroblast_diff$gene1 != Fibroblast_diff$gene2,]
+boxplot(Fibroblast_diff$diff)
+Q1                       <- quantile(Fibroblast_diff$diff, 0.25)
+Q3                       <- quantile(Fibroblast_diff$diff, 0.75)
+IQR                      <- Q3 - Q1
+threshold1               <- Q3 + 1.5 * IQR #1.56
+threshold2               <- Q1 - 1.5 * IQR#-1.45
+Fibroblast_diff_coexp_df     <- Fibroblast_diff[Fibroblast_diff$diff > threshold1|
+                                                  Fibroblast_diff$diff < threshold2, ]
+RCC_Fibroblast_sigdiff_coexp_df       <- Fibroblast_diff_coexp_df[Fibroblast_diff_coexp_df$gene1 != Fibroblast_diff_coexp_df$gene2,]
+saveRDS(RCC_Fibroblast_sigdiff_coexp_df,file = "Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Fibroblast/RCC_Fibroblast_sigdiff_coexp_df.rds")
+
+####4.Endothelial####
+Endothelial_normal_Kidney_reliable_coexp_df <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Endothelial/Endothelial_normal_Kidney_reliable_coexp_df.rds")
+Endothelial_tumor_Kidney_reliable_coexp_df <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Endothelial/Endothelial_tumor_Kidney_reliable_coexp_df.rds")
+Endothelial_diff                          <- merge(Endothelial_tumor_Kidney_reliable_coexp_df,Endothelial_normal_Kidney_reliable_coexp_df,by=c("gene1","gene2"),all = T)
+Endothelial_diff                          <- Endothelial_diff[,c(1,2,4,6)]
+colnames(Endothelial_diff)[3:4]           <- c("tumor","normal")
+Endothelial_diff[is.na(Endothelial_diff)]       <-  0
+Endothelial_diff$diff                     <- Endothelial_diff$tumor - Endothelial_diff$normal
+Endothelial_diff                          <- Endothelial_diff[Endothelial_diff$gene1 != Endothelial_diff$gene2,]
+boxplot(Endothelial_diff$diff)
+Q1                       <- quantile(Endothelial_diff$diff, 0.25)
+Q3                       <- quantile(Endothelial_diff$diff, 0.75)
+IQR                      <- Q3 - Q1
+threshold1               <- Q3 + 1.5 * IQR #0.902
+threshold2               <- Q1 - 1.5 * IQR#-0.901
+Endothelial_diff_coexp_df     <- Endothelial_diff[Endothelial_diff$diff > threshold1|
+                                                    Endothelial_diff$diff < threshold2, ]
+RCC_Endothelial_sigdiff_coexp_df       <- Endothelial_diff_coexp_df[Endothelial_diff_coexp_df$gene1 != Endothelial_diff_coexp_df$gene2,]
+saveRDS(RCC_Endothelial_sigdiff_coexp_df,file = "Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Endothelial/RCC_Endothelial_sigdiff_coexp_df.rds")
+
+
+####5.Macrophage####
+Macrophage_normal_Kidney_reliable_coexp_df <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Macrophage/Macrophage_normal_Kidney_reliable_coexp_df.rds")
+Macrophage_tumor_Kidney_reliable_coexp_df <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Macrophage/Macrophage_tumor_Kidney_reliable_coexp_df.rds")
+Macrophage_diff                          <- merge(Macrophage_tumor_Kidney_reliable_coexp_df,Macrophage_normal_Kidney_reliable_coexp_df,by=c("gene1","gene2"),all = T)
+Macrophage_diff                          <- Macrophage_diff[,c(1,2,4,6)]
+colnames(Macrophage_diff)[3:4]           <- c("tumor","normal")
+Macrophage_diff[is.na(Macrophage_diff)]       <-  0
+Macrophage_diff$diff                     <- Macrophage_diff$tumor - Macrophage_diff$normal
+Macrophage_diff                          <- Macrophage_diff[Macrophage_diff$gene1 != Macrophage_diff$gene2,]
+boxplot(Macrophage_diff$diff)
+Q1                       <- quantile(Macrophage_diff$diff, 0.25)
+Q3                       <- quantile(Macrophage_diff$diff, 0.75)
+IQR                      <- Q3 - Q1
+threshold1               <- Q3 + 1.5 * IQR #0.625
+threshold2               <- Q1 - 1.5 * IQR#-0.558
+Macrophage_diff_coexp_df     <- Macrophage_diff[Macrophage_diff$diff > threshold1|
+                                                  Macrophage_diff$diff < threshold2, ]
+RCC_Macrophage_sigdiff_coexp_df       <- Macrophage_diff_coexp_df[Macrophage_diff_coexp_df$gene1 != Macrophage_diff_coexp_df$gene2,]
+saveRDS(RCC_Macrophage_sigdiff_coexp_df,file = "Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Macrophage/RCC_Macrophage_sigdiff_coexp_df.rds")
+
+
+####6.Malignant####
+Epithelial_normal_Kidney_reliable_coexp_df <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Malignant/Epithelial_normal_Kidney_reliable_coexp_df.rds")
+Malignant_tumor_Kidney_reliable_coexp_df <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Malignant/Malignant_tumor_Kidney_reliable_coexp_df.rds")
+Malignant_diff                          <- merge(Malignant_tumor_Kidney_reliable_coexp_df,Epithelial_normal_Kidney_reliable_coexp_df,by=c("gene1","gene2"),all = T)
+Malignant_diff                          <- Malignant_diff[,c(1,2,4,6)]
+colnames(Malignant_diff)[3:4]           <- c("tumor","normal")
+Malignant_diff[is.na(Malignant_diff)]       <-  0
+Malignant_diff$diff                     <- Malignant_diff$tumor - Malignant_diff$normal
+Malignant_diff                          <- Malignant_diff[Malignant_diff$gene1 != Malignant_diff$gene2,]
+boxplot(Malignant_diff$diff)
+Q1                       <- quantile(Malignant_diff$diff, 0.25)
+Q3                       <- quantile(Malignant_diff$diff, 0.75)
+IQR                      <- Q3 - Q1
+threshold1               <- Q3 + 1.5 * IQR #0.685
+threshold2               <- Q1 - 1.5 * IQR#-0.672
+Malignant_diff_coexp_df     <- Malignant_diff[Malignant_diff$diff > threshold1|
+                                                Malignant_diff$diff < threshold2, ]
+RCC_Malignant_sigdiff_coexp_df       <- Malignant_diff_coexp_df[Malignant_diff_coexp_df$gene1 != Malignant_diff_coexp_df$gene2,]
+saveRDS(RCC_Malignant_sigdiff_coexp_df,file = "Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Malignant/RCC_Malignant_sigdiff_coexp_df.rds")
