@@ -1,0 +1,845 @@
+######################################
+####get key TF from co-expressions####
+######################################
+
+
+
+####Breast cancer####
+####*T_cell####
+human_TF                           <- read.delim("Pro_CoExpression/data/Homo_sapiens_TF.txt",sep = "\t")
+human_TF_id                        <- human_TF$Symbol
+Tcell_TF_coexp                     <- Tcell_reliable_coexp_mat[rownames(Tcell_reliable_coexp_mat) %in% human_TF_id,]
+Tcell_TF_coexp                     <- Tcell_TF_coexp[rowSums(Tcell_TF_coexp != 0) > 0,]
+breast_cancer_Tcell_TF                 <- list()
+for (j in 1:nrow(Tcell_TF_coexp)) {
+  non_zero_values         <- Tcell_TF_coexp[j, Tcell_TF_coexp[j, ] != 0]
+  sorted_values           <- sort(non_zero_values, decreasing = TRUE)
+  breast_cancer_Tcell_TF      <- append(breast_cancer_Tcell_TF, list(sorted_values))
+} 
+names(breast_cancer_Tcell_TF)       <- rownames(Tcell_TF_coexp)
+
+
+lengths              <- sapply(breast_cancer_Tcell_TF, length)
+top_indices          <- order(lengths, decreasing = TRUE)[1:100]
+Tcell_TF_meta        <- data.frame(
+  name = names(breast_cancer_Tcell_TF)[top_indices],
+  length = lengths[top_indices])
+brca_Tcell_TF_list   <- list(allTF=breast_cancer_Tcell_TF)
+brca_Tcell_TF_list   <- append(brca_Tcell_TF_list,list(Top100_TF=Tcell_TF_meta))
+brca_Tcell_TF_list   <- append(brca_Tcell_TF_list,list(Tcell_TF_coexp = Tcell_TF_coexp))
+saveRDS(brca_Tcell_TF_list,file = "Pro_CoExpression/output/data/3CA/Breast/common_genesets/Tcell/brca_Tcell_TF_list.rds")
+
+
+####*B_cell####
+human_TF                           <- read.delim("Pro_CoExpression/data/Homo_sapiens_TF.txt",sep = "\t")
+human_TF_id                        <- human_TF$Symbol
+Bcell_TF_coexp                     <- Bcell_reliable_coexp_mat[rownames(Bcell_reliable_coexp_mat) %in% human_TF_id,]
+Bcell_TF_coexp                     <- Bcell_TF_coexp[rowSums(Bcell_TF_coexp != 0) > 0,]
+breast_cancer_Bcell_TF                 <- list()
+for (j in 1:nrow(Bcell_TF_coexp)) {
+  non_zero_values         <- Bcell_TF_coexp[j, Bcell_TF_coexp[j, ] != 0]
+  sorted_values           <- sort(non_zero_values, decreasing = TRUE)
+  breast_cancer_Bcell_TF      <- append(breast_cancer_Bcell_TF, list(sorted_values))
+} 
+names(breast_cancer_Bcell_TF)       <- rownames(Bcell_TF_coexp)
+
+
+lengths              <- sapply(breast_cancer_Bcell_TF, length)
+top_indices          <- order(lengths, decreasing = TRUE)[1:100]
+Bcell_TF_meta        <- data.frame(
+  name = names(breast_cancer_Bcell_TF)[top_indices],
+  length = lengths[top_indices])
+brca_Bcell_TF_list   <- list(allTF=breast_cancer_Bcell_TF)
+brca_Bcell_TF_list   <- append(brca_Bcell_TF_list,list(Top100_TF=Bcell_TF_meta))
+brca_Bcell_TF_list   <- append(brca_Bcell_TF_list,list(Bcell_TF_coexp = Bcell_TF_coexp))
+saveRDS(brca_Bcell_TF_list,file = "Pro_CoExpression/output/data/3CA/Breast/common_genesets/Bcell/brca_Bcell_TF_list.rds")
+
+
+
+####*Fibroblast####
+human_TF                           <- read.delim("Pro_CoExpression/data/Homo_sapiens_TF.txt",sep = "\t")
+human_TF_id                        <- human_TF$Symbol
+Fibroblast_TF_coexp                     <- Fibroblast_reliable_coexp_mat[rownames(Fibroblast_reliable_coexp_mat) %in% human_TF_id,]
+Fibroblast_TF_coexp                     <- Fibroblast_TF_coexp[rowSums(Fibroblast_TF_coexp != 0) > 0,]
+breast_cancer_Fibroblast_TF                 <- list()
+for (j in 1:nrow(Fibroblast_TF_coexp)) {
+  non_zero_values         <- Fibroblast_TF_coexp[j, Fibroblast_TF_coexp[j, ] != 0]
+  sorted_values           <- sort(non_zero_values, decreasing = TRUE)
+  breast_cancer_Fibroblast_TF      <- append(breast_cancer_Fibroblast_TF, list(sorted_values))
+} 
+names(breast_cancer_Fibroblast_TF)       <- rownames(Fibroblast_TF_coexp)
+
+
+lengths              <- sapply(breast_cancer_Fibroblast_TF, length)
+top_indices          <- order(lengths, decreasing = TRUE)[1:100]
+Fibroblast_TF_meta        <- data.frame(
+  name = names(breast_cancer_Fibroblast_TF)[top_indices],
+  length = lengths[top_indices])
+brca_Fibroblast_TF_list   <- list(allTF=breast_cancer_Fibroblast_TF)
+brca_Fibroblast_TF_list   <- append(brca_Fibroblast_TF_list,list(Top100_TF=Fibroblast_TF_meta))
+brca_Fibroblast_TF_list   <- append(brca_Fibroblast_TF_list,list(Fibroblast_TF_coexp = Fibroblast_TF_coexp))
+saveRDS(brca_Fibroblast_TF_list,file = "Pro_CoExpression/output/data/3CA/Breast/common_genesets/Fibroblast/brca_Fibroblast_TF_list.rds")
+
+
+####*Endothelial####
+human_TF                           <- read.delim("Pro_CoExpression/data/Homo_sapiens_TF.txt",sep = "\t")
+human_TF_id                        <- human_TF$Symbol
+Endothelial_TF_coexp                     <- Endothelial_reliable_coexp_mat[rownames(Endothelial_reliable_coexp_mat) %in% human_TF_id,]
+Endothelial_TF_coexp                     <- Endothelial_TF_coexp[rowSums(Endothelial_TF_coexp != 0) > 0,]
+breast_cancer_Endothelial_TF                 <- list()
+for (j in 1:nrow(Endothelial_TF_coexp)) {
+  non_zero_values         <- Endothelial_TF_coexp[j, Endothelial_TF_coexp[j, ] != 0]
+  sorted_values           <- sort(non_zero_values, decreasing = TRUE)
+  breast_cancer_Endothelial_TF      <- append(breast_cancer_Endothelial_TF, list(sorted_values))
+} 
+names(breast_cancer_Endothelial_TF)       <- rownames(Endothelial_TF_coexp)
+
+
+lengths              <- sapply(breast_cancer_Endothelial_TF, length)
+top_indices          <- order(lengths, decreasing = TRUE)[1:100]
+Endothelial_TF_meta        <- data.frame(
+  name = names(breast_cancer_Endothelial_TF)[top_indices],
+  length = lengths[top_indices])
+brca_Endothelial_TF_list   <- list(allTF=breast_cancer_Endothelial_TF)
+brca_Endothelial_TF_list   <- append(brca_Endothelial_TF_list,list(Top100_TF=Endothelial_TF_meta))
+brca_Endothelial_TF_list   <- append(brca_Endothelial_TF_list,list(Endothelial_TF_coexp = Endothelial_TF_coexp))
+saveRDS(brca_Endothelial_TF_list,file = "Pro_CoExpression/output/data/3CA/Breast/common_genesets/Endothelial/brca_Endothelial_TF_list.rds")
+
+
+####*Macrophage####
+human_TF                           <- read.delim("Pro_CoExpression/data/Homo_sapiens_TF.txt",sep = "\t")
+human_TF_id                        <- human_TF$Symbol
+Macrophage_TF_coexp                     <- Macrophage_reliable_coexp_mat[rownames(Macrophage_reliable_coexp_mat) %in% human_TF_id,]
+Macrophage_TF_coexp                     <- Macrophage_TF_coexp[rowSums(Macrophage_TF_coexp != 0) > 0,]
+breast_cancer_Macrophage_TF                 <- list()
+for (j in 1:nrow(Macrophage_TF_coexp)) {
+  non_zero_values         <- Macrophage_TF_coexp[j, Macrophage_TF_coexp[j, ] != 0]
+  sorted_values           <- sort(non_zero_values, decreasing = TRUE)
+  breast_cancer_Macrophage_TF      <- append(breast_cancer_Macrophage_TF, list(sorted_values))
+} 
+names(breast_cancer_Macrophage_TF)       <- rownames(Macrophage_TF_coexp)
+
+
+lengths              <- sapply(breast_cancer_Macrophage_TF, length)
+top_indices          <- order(lengths, decreasing = TRUE)[1:100]
+Macrophage_TF_meta        <- data.frame(
+  name = names(breast_cancer_Macrophage_TF)[top_indices],
+  length = lengths[top_indices])
+brca_Macrophage_TF_list   <- list(allTF=breast_cancer_Macrophage_TF)
+brca_Macrophage_TF_list   <- append(brca_Macrophage_TF_list,list(Top100_TF=Macrophage_TF_meta))
+brca_Macrophage_TF_list   <- append(brca_Macrophage_TF_list,list(Macrophage_TF_coexp = Macrophage_TF_coexp))
+saveRDS(brca_Macrophage_TF_list,file = "Pro_CoExpression/output/data/3CA/Breast/common_genesets/Macrophage/brca_Macrophage_TF_list.rds")
+
+####*Malignant####
+human_TF                           <- read.delim("Pro_CoExpression/data/Homo_sapiens_TF.txt",sep = "\t")
+human_TF_id                        <- human_TF$Symbol
+Malignant_TF_coexp                     <- Malignant_reliable_coexp_mat[rownames(Malignant_reliable_coexp_mat) %in% human_TF_id,]
+Malignant_TF_coexp                     <- Malignant_TF_coexp[rowSums(Malignant_TF_coexp != 0) > 0,]
+breast_cancer_Malignant_TF                 <- list()
+for (j in 1:nrow(Malignant_TF_coexp)) {
+  non_zero_values         <- Malignant_TF_coexp[j, Malignant_TF_coexp[j, ] != 0]
+  sorted_values           <- sort(non_zero_values, decreasing = TRUE)
+  breast_cancer_Malignant_TF      <- append(breast_cancer_Malignant_TF, list(sorted_values))
+} 
+names(breast_cancer_Malignant_TF)       <- rownames(Malignant_TF_coexp)
+
+
+lengths              <- sapply(breast_cancer_Malignant_TF, length)
+top_indices          <- order(lengths, decreasing = TRUE)[1:100]
+Malignant_TF_meta        <- data.frame(
+  name = names(breast_cancer_Malignant_TF)[top_indices],
+  length = lengths[top_indices])
+brca_Malignant_TF_list   <- list(allTF=breast_cancer_Malignant_TF)
+brca_Malignant_TF_list   <- append(brca_Malignant_TF_list,list(Top100_TF=Malignant_TF_meta))
+brca_Malignant_TF_list   <- append(brca_Malignant_TF_list,list(Malignant_TF_coexp = Malignant_TF_coexp))
+saveRDS(brca_Malignant_TF_list,file = "Pro_CoExpression/output/data/3CA/Breast/common_genesets/Malignant/brca_Malignant_TF_list.rds")
+
+
+
+
+####Liver cacner#### 
+####*Tcell####
+human_TF                           <- read.delim("Pro_CoExpression/data/Homo_sapiens_TF.txt",sep = "\t")
+human_TF_id                        <- human_TF$Symbol
+Tcell_TF_coexp                     <- Tcell_reliable_coexp_mat[rownames(Tcell_reliable_coexp_mat) %in% human_TF_id,]
+Tcell_TF_coexp                     <- Tcell_TF_coexp[rowSums(Tcell_TF_coexp != 0) > 0,]
+Liver_cancer_Tcell_TF                 <- list()
+for (j in 1:nrow(Tcell_TF_coexp)) {
+  non_zero_values         <- Tcell_TF_coexp[j, Tcell_TF_coexp[j, ] != 0]
+  sorted_values           <- sort(non_zero_values, decreasing = TRUE)
+  Liver_cancer_Tcell_TF      <- append(Liver_cancer_Tcell_TF, list(sorted_values))
+} 
+names(Liver_cancer_Tcell_TF)       <- rownames(Tcell_TF_coexp)
+
+
+lengths              <- sapply(Liver_cancer_Tcell_TF, length)
+top_indices          <- order(lengths, decreasing = TRUE)[1:100]
+Tcell_TF_meta        <- data.frame(
+  name = names(Liver_cancer_Tcell_TF)[top_indices],
+  length = lengths[top_indices])
+hcc_Tcell_TF_list   <- list(allTF=Liver_cancer_Tcell_TF)
+hcc_Tcell_TF_list   <- append(hcc_Tcell_TF_list,list(Top100_TF=Tcell_TF_meta))
+hcc_Tcell_TF_list   <- append(hcc_Tcell_TF_list,list(Tcell_TF_coexp = Tcell_TF_coexp))
+saveRDS(hcc_Tcell_TF_list,file = "Pro_CoExpression/output/data/3CA/Liver/common_genesets/T_cell/hcc_Tcell_TF_list.rds")
+
+####*Bcell####
+human_TF                           <- read.delim("Pro_CoExpression/data/Homo_sapiens_TF.txt",sep = "\t")
+human_TF_id                        <- human_TF$Symbol
+Bcell_TF_coexp                     <- Bcell_reliable_coexp_mat[rownames(Bcell_reliable_coexp_mat) %in% human_TF_id,]
+Bcell_TF_coexp                     <- Bcell_TF_coexp[rowSums(Bcell_TF_coexp != 0) > 0,]
+Liver_cancer_Bcell_TF                 <- list()
+for (j in 1:nrow(Bcell_TF_coexp)) {
+  non_zero_values         <- Bcell_TF_coexp[j, Bcell_TF_coexp[j, ] != 0]
+  sorted_values           <- sort(non_zero_values, decreasing = TRUE)
+  Liver_cancer_Bcell_TF      <- append(Liver_cancer_Bcell_TF, list(sorted_values))
+} 
+names(Liver_cancer_Bcell_TF)       <- rownames(Bcell_TF_coexp)
+
+
+lengths              <- sapply(Liver_cancer_Bcell_TF, length)
+top_indices          <- order(lengths, decreasing = TRUE)[1:100]
+Bcell_TF_meta        <- data.frame(
+  name = names(Liver_cancer_Bcell_TF)[top_indices],
+  length = lengths[top_indices])
+hcc_Bcell_TF_list   <- list(allTF=Liver_cancer_Bcell_TF)
+hcc_Bcell_TF_list   <- append(hcc_Bcell_TF_list,list(Top100_TF=Bcell_TF_meta))
+hcc_Bcell_TF_list   <- append(hcc_Bcell_TF_list,list(Bcell_TF_coexp = Bcell_TF_coexp))
+saveRDS(hcc_Bcell_TF_list,file = "Pro_CoExpression/output/data/3CA/Liver/common_genesets/B_cell/hcc_Bcell_TF_list.rds")
+
+
+####*Fibroblast####
+human_TF                           <- read.delim("Pro_CoExpression/data/Homo_sapiens_TF.txt",sep = "\t")
+human_TF_id                        <- human_TF$Symbol
+Fibroblast_TF_coexp                     <- Fibroblast_reliable_coexp_mat[rownames(Fibroblast_reliable_coexp_mat) %in% human_TF_id,]
+Fibroblast_TF_coexp                     <- Fibroblast_TF_coexp[rowSums(Fibroblast_TF_coexp != 0) > 0,]
+Liver_cancer_Fibroblast_TF                 <- list()
+for (j in 1:nrow(Fibroblast_TF_coexp)) {
+  non_zero_values         <- Fibroblast_TF_coexp[j, Fibroblast_TF_coexp[j, ] != 0]
+  sorted_values           <- sort(non_zero_values, decreasing = TRUE)
+  Liver_cancer_Fibroblast_TF      <- append(Liver_cancer_Fibroblast_TF, list(sorted_values))
+} 
+names(Liver_cancer_Fibroblast_TF)       <- rownames(Fibroblast_TF_coexp)
+
+
+lengths              <- sapply(Liver_cancer_Fibroblast_TF, length)
+top_indices          <- order(lengths, decreasing = TRUE)[1:100]
+Fibroblast_TF_meta        <- data.frame(
+  name = names(Liver_cancer_Fibroblast_TF)[top_indices],
+  length = lengths[top_indices])
+hcc_Fibroblast_TF_list   <- list(allTF=Liver_cancer_Fibroblast_TF)
+hcc_Fibroblast_TF_list   <- append(hcc_Fibroblast_TF_list,list(Top100_TF=Fibroblast_TF_meta))
+hcc_Fibroblast_TF_list   <- append(hcc_Fibroblast_TF_list,list(Fibroblast_TF_coexp = Fibroblast_TF_coexp))
+saveRDS(hcc_Fibroblast_TF_list,file = "Pro_CoExpression/output/data/3CA/Liver/common_genesets/Fibroblast/hcc_Fibroblast_TF_list.rds")
+
+####*Endothelial####
+human_TF                           <- read.delim("Pro_CoExpression/data/Homo_sapiens_TF.txt",sep = "\t")
+human_TF_id                        <- human_TF$Symbol
+Endothelial_TF_coexp                     <- Endothelial_reliable_coexp_mat[rownames(Endothelial_reliable_coexp_mat) %in% human_TF_id,]
+Endothelial_TF_coexp                     <- Endothelial_TF_coexp[rowSums(Endothelial_TF_coexp != 0) > 0,]
+Liver_cancer_Endothelial_TF                 <- list()
+for (j in 1:nrow(Endothelial_TF_coexp)) {
+  non_zero_values         <- Endothelial_TF_coexp[j, Endothelial_TF_coexp[j, ] != 0]
+  sorted_values           <- sort(non_zero_values, decreasing = TRUE)
+  Liver_cancer_Endothelial_TF      <- append(Liver_cancer_Endothelial_TF, list(sorted_values))
+} 
+names(Liver_cancer_Endothelial_TF)       <- rownames(Endothelial_TF_coexp)
+
+
+lengths              <- sapply(Liver_cancer_Endothelial_TF, length)
+top_indices          <- order(lengths, decreasing = TRUE)[1:100]
+Endothelial_TF_meta        <- data.frame(
+  name = names(Liver_cancer_Endothelial_TF)[top_indices],
+  length = lengths[top_indices])
+hcc_Endothelial_TF_list   <- list(allTF=Liver_cancer_Endothelial_TF)
+hcc_Endothelial_TF_list   <- append(hcc_Endothelial_TF_list,list(Top100_TF=Endothelial_TF_meta))
+hcc_Endothelial_TF_list   <- append(hcc_Endothelial_TF_list,list(Endothelial_TF_coexp = Endothelial_TF_coexp))
+saveRDS(hcc_Endothelial_TF_list,file = "Pro_CoExpression/output/data/3CA/Liver/common_genesets/Endothelial/hcc_Endothelial_TF_list.rds")
+
+####*Macrophage####
+human_TF                           <- read.delim("Pro_CoExpression/data/Homo_sapiens_TF.txt",sep = "\t")
+human_TF_id                        <- human_TF$Symbol
+Macrophage_TF_coexp                     <- Macrophage_reliable_coexp_mat[rownames(Macrophage_reliable_coexp_mat) %in% human_TF_id,]
+Macrophage_TF_coexp                     <- Macrophage_TF_coexp[rowSums(Macrophage_TF_coexp != 0) > 0,]
+Liver_cancer_Macrophage_TF                 <- list()
+for (j in 1:nrow(Macrophage_TF_coexp)) {
+  non_zero_values         <- Macrophage_TF_coexp[j, Macrophage_TF_coexp[j, ] != 0]
+  sorted_values           <- sort(non_zero_values, decreasing = TRUE)
+  Liver_cancer_Macrophage_TF      <- append(Liver_cancer_Macrophage_TF, list(sorted_values))
+} 
+names(Liver_cancer_Macrophage_TF)       <- rownames(Macrophage_TF_coexp)
+
+
+lengths              <- sapply(Liver_cancer_Macrophage_TF, length)
+top_indices          <- order(lengths, decreasing = TRUE)[1:100]
+Macrophage_TF_meta        <- data.frame(
+  name = names(Liver_cancer_Macrophage_TF)[top_indices],
+  length = lengths[top_indices])
+hcc_Macrophage_TF_list   <- list(allTF=Liver_cancer_Macrophage_TF)
+hcc_Macrophage_TF_list   <- append(hcc_Macrophage_TF_list,list(Top100_TF=Macrophage_TF_meta))
+hcc_Macrophage_TF_list   <- append(hcc_Macrophage_TF_list,list(Macrophage_TF_coexp = Macrophage_TF_coexp))
+saveRDS(hcc_Macrophage_TF_list,file = "Pro_CoExpression/output/data/3CA/Liver/common_genesets/Macrophage/hcc_Macrophage_TF_list.rds")
+
+####*Hepatocyte####
+human_TF                           <- read.delim("Pro_CoExpression/data/Homo_sapiens_TF.txt",sep = "\t")
+human_TF_id                        <- human_TF$Symbol
+Hepatocyte_TF_coexp                     <- Hepatocyte_reliable_coexp_mat[rownames(Hepatocyte_reliable_coexp_mat) %in% human_TF_id,]
+Hepatocyte_TF_coexp                     <- Hepatocyte_TF_coexp[rowSums(Hepatocyte_TF_coexp != 0) > 0,]
+Liver_cancer_Hepatocyte_TF                 <- list()
+for (j in 1:nrow(Hepatocyte_TF_coexp)) {
+  non_zero_values         <- Hepatocyte_TF_coexp[j, Hepatocyte_TF_coexp[j, ] != 0]
+  sorted_values           <- sort(non_zero_values, decreasing = TRUE)
+  Liver_cancer_Hepatocyte_TF      <- append(Liver_cancer_Hepatocyte_TF, list(sorted_values))
+} 
+names(Liver_cancer_Hepatocyte_TF)       <- rownames(Hepatocyte_TF_coexp)
+
+
+lengths              <- sapply(Liver_cancer_Hepatocyte_TF, length)
+top_indices          <- order(lengths, decreasing = TRUE)[1:100]
+Hepatocyte_TF_meta        <- data.frame(
+  name = names(Liver_cancer_Hepatocyte_TF)[top_indices],
+  length = lengths[top_indices])
+hcc_Hepatocyte_TF_list   <- list(allTF=Liver_cancer_Hepatocyte_TF)
+hcc_Hepatocyte_TF_list   <- append(hcc_Hepatocyte_TF_list,list(Top100_TF=Hepatocyte_TF_meta))
+hcc_Hepatocyte_TF_list   <- append(hcc_Hepatocyte_TF_list,list(Hepatocyte_TF_coexp = Hepatocyte_TF_coexp))
+saveRDS(hcc_Hepatocyte_TF_list,file = "Pro_CoExpression/output/data/3CA/Liver/common_genesets/Hepatocyte/hcc_Hepatocyte_TF_list.rds")
+
+####Ovarian cancer####
+####*T_cell####
+human_TF                           <- read.delim("Pro_CoExpression/data/Homo_sapiens_TF.txt",sep = "\t")
+human_TF_id                        <- human_TF$Symbol
+Tcell_TF_coexp                     <- Tcell_reliable_coexp_mat[rownames(Tcell_reliable_coexp_mat) %in% human_TF_id,]
+Tcell_TF_coexp                     <- Tcell_TF_coexp[rowSums(Tcell_TF_coexp != 0) > 0,]
+Ovarian_cancer_Tcell_TF                 <- list()
+for (j in 1:nrow(Tcell_TF_coexp)) {
+  non_zero_values         <- Tcell_TF_coexp[j, Tcell_TF_coexp[j, ] != 0]
+  sorted_values           <- sort(non_zero_values, decreasing = TRUE)
+  Ovarian_cancer_Tcell_TF      <- append(Ovarian_cancer_Tcell_TF, list(sorted_values))
+} 
+names(Ovarian_cancer_Tcell_TF)       <- rownames(Tcell_TF_coexp)
+
+
+lengths              <- sapply(Ovarian_cancer_Tcell_TF, length)
+top_indices          <- order(lengths, decreasing = TRUE)[1:100]
+Tcell_TF_meta        <- data.frame(
+  name = names(Ovarian_cancer_Tcell_TF)[top_indices],
+  length = lengths[top_indices])
+hgsoc_Tcell_TF_list   <- list(allTF=Ovarian_cancer_Tcell_TF)
+hgsoc_Tcell_TF_list   <- append(hgsoc_Tcell_TF_list,list(Top100_TF=Tcell_TF_meta))
+hgsoc_Tcell_TF_list   <- append(hgsoc_Tcell_TF_list,list(Tcell_TF_coexp = Tcell_TF_coexp))
+saveRDS(hgsoc_Tcell_TF_list,file = "Pro_CoExpression/output/data/3CA/Ovarian/common_genesets/T_cell/hgsoc_Tcell_TF_list.rds")
+
+
+####*Bcell####
+human_TF                           <- read.delim("Pro_CoExpression/data/Homo_sapiens_TF.txt",sep = "\t")
+human_TF_id                        <- human_TF$Symbol
+Bcell_TF_coexp                     <- Bcell_reliable_coexp_mat[rownames(Bcell_reliable_coexp_mat) %in% human_TF_id,]
+Bcell_TF_coexp                     <- Bcell_TF_coexp[rowSums(Bcell_TF_coexp != 0) > 0,]
+Ovarian_cancer_Bcell_TF                 <- list()
+for (j in 1:nrow(Bcell_TF_coexp)) {
+  non_zero_values         <- Bcell_TF_coexp[j, Bcell_TF_coexp[j, ] != 0]
+  sorted_values           <- sort(non_zero_values, decreasing = TRUE)
+  Ovarian_cancer_Bcell_TF      <- append(Ovarian_cancer_Bcell_TF, list(sorted_values))
+} 
+names(Ovarian_cancer_Bcell_TF)       <- rownames(Bcell_TF_coexp)
+
+
+lengths              <- sapply(Ovarian_cancer_Bcell_TF, length)
+top_indices          <- order(lengths, decreasing = TRUE)[1:100]
+Bcell_TF_meta        <- data.frame(
+  name = names(Ovarian_cancer_Bcell_TF)[top_indices],
+  length = lengths[top_indices])
+hgsoc_Bcell_TF_list   <- list(allTF=Ovarian_cancer_Bcell_TF)
+hgsoc_Bcell_TF_list   <- append(hgsoc_Bcell_TF_list,list(Top100_TF=Bcell_TF_meta))
+hgsoc_Bcell_TF_list   <- append(hgsoc_Bcell_TF_list,list(Bcell_TF_coexp = Bcell_TF_coexp))
+saveRDS(hgsoc_Bcell_TF_list,file = "Pro_CoExpression/output/data/3CA/Ovarian/common_genesets/B_cell/hgsoc_Bcell_TF_list.rds")
+
+####*Fibroblast####
+human_TF                           <- read.delim("Pro_CoExpression/data/Homo_sapiens_TF.txt",sep = "\t")
+human_TF_id                        <- human_TF$Symbol
+Fibroblast_TF_coexp                     <- Fibroblast_reliable_coexp_mat[rownames(Fibroblast_reliable_coexp_mat) %in% human_TF_id,]
+Fibroblast_TF_coexp                     <- Fibroblast_TF_coexp[rowSums(Fibroblast_TF_coexp != 0) > 0,]
+Ovarian_cancer_Fibroblast_TF                 <- list()
+for (j in 1:nrow(Fibroblast_TF_coexp)) {
+  non_zero_values         <- Fibroblast_TF_coexp[j, Fibroblast_TF_coexp[j, ] != 0]
+  sorted_values           <- sort(non_zero_values, decreasing = TRUE)
+  Ovarian_cancer_Fibroblast_TF      <- append(Ovarian_cancer_Fibroblast_TF, list(sorted_values))
+} 
+names(Ovarian_cancer_Fibroblast_TF)       <- rownames(Fibroblast_TF_coexp)
+
+
+lengths              <- sapply(Ovarian_cancer_Fibroblast_TF, length)
+top_indices          <- order(lengths, decreasing = TRUE)[1:100]
+Fibroblast_TF_meta        <- data.frame(
+  name = names(Ovarian_cancer_Fibroblast_TF)[top_indices],
+  length = lengths[top_indices])
+hgsoc_Fibroblast_TF_list   <- list(allTF=Ovarian_cancer_Fibroblast_TF)
+hgsoc_Fibroblast_TF_list   <- append(hgsoc_Fibroblast_TF_list,list(Top100_TF=Fibroblast_TF_meta))
+hgsoc_Fibroblast_TF_list   <- append(hgsoc_Fibroblast_TF_list,list(Fibroblast_TF_coexp = Fibroblast_TF_coexp))
+saveRDS(hgsoc_Fibroblast_TF_list,file = "Pro_CoExpression/output/data/3CA/Ovarian/common_genesets/Fibroblast/hgsoc_Fibroblast_TF_list.rds")
+
+####*Endothelial####
+human_TF                           <- read.delim("Pro_CoExpression/data/Homo_sapiens_TF.txt",sep = "\t")
+human_TF_id                        <- human_TF$Symbol
+Endothelial_TF_coexp                     <- Endothelial_reliable_coexp_mat[rownames(Endothelial_reliable_coexp_mat) %in% human_TF_id,]
+Endothelial_TF_coexp                     <- Endothelial_TF_coexp[rowSums(Endothelial_TF_coexp != 0) > 0,]
+Ovarian_cancer_Endothelial_TF                 <- list()
+for (j in 1:nrow(Endothelial_TF_coexp)) {
+  non_zero_values         <- Endothelial_TF_coexp[j, Endothelial_TF_coexp[j, ] != 0]
+  sorted_values           <- sort(non_zero_values, decreasing = TRUE)
+  Ovarian_cancer_Endothelial_TF      <- append(Ovarian_cancer_Endothelial_TF, list(sorted_values))
+} 
+names(Ovarian_cancer_Endothelial_TF)       <- rownames(Endothelial_TF_coexp)
+
+
+lengths              <- sapply(Ovarian_cancer_Endothelial_TF, length)
+top_indices          <- order(lengths, decreasing = TRUE)[1:100]
+Endothelial_TF_meta        <- data.frame(
+  name = names(Ovarian_cancer_Endothelial_TF)[top_indices],
+  length = lengths[top_indices])
+hgsoc_Endothelial_TF_list   <- list(allTF=Ovarian_cancer_Endothelial_TF)
+hgsoc_Endothelial_TF_list   <- append(hgsoc_Endothelial_TF_list,list(Top100_TF=Endothelial_TF_meta))
+hgsoc_Endothelial_TF_list   <- append(hgsoc_Endothelial_TF_list,list(Endothelial_TF_coexp = Endothelial_TF_coexp))
+saveRDS(hgsoc_Endothelial_TF_list,file = "Pro_CoExpression/output/data/3CA/Ovarian/common_genesets/Endothelial/hgsoc_Endothelial_TF_list.rds")
+
+
+####*Macrophage####
+human_TF                           <- read.delim("Pro_CoExpression/data/Homo_sapiens_TF.txt",sep = "\t")
+human_TF_id                        <- human_TF$Symbol
+Macrophage_TF_coexp                     <- Macrophage_reliable_coexp_mat[rownames(Macrophage_reliable_coexp_mat) %in% human_TF_id,]
+Macrophage_TF_coexp                     <- Macrophage_TF_coexp[rowSums(Macrophage_TF_coexp != 0) > 0,]
+Ovarian_cancer_Macrophage_TF                 <- list()
+for (j in 1:nrow(Macrophage_TF_coexp)) {
+  non_zero_values         <- Macrophage_TF_coexp[j, Macrophage_TF_coexp[j, ] != 0]
+  sorted_values           <- sort(non_zero_values, decreasing = TRUE)
+  Ovarian_cancer_Macrophage_TF      <- append(Ovarian_cancer_Macrophage_TF, list(sorted_values))
+} 
+names(Ovarian_cancer_Macrophage_TF)       <- rownames(Macrophage_TF_coexp)
+
+
+lengths              <- sapply(Ovarian_cancer_Macrophage_TF, length)
+top_indices          <- order(lengths, decreasing = TRUE)[1:100]
+Macrophage_TF_meta        <- data.frame(
+  name = names(Ovarian_cancer_Macrophage_TF)[top_indices],
+  length = lengths[top_indices])
+hgsoc_Macrophage_TF_list   <- list(allTF=Ovarian_cancer_Macrophage_TF)
+hgsoc_Macrophage_TF_list   <- append(hgsoc_Macrophage_TF_list,list(Top100_TF=Macrophage_TF_meta))
+hgsoc_Macrophage_TF_list   <- append(hgsoc_Macrophage_TF_list,list(Macrophage_TF_coexp = Macrophage_TF_coexp))
+saveRDS(hgsoc_Macrophage_TF_list,file = "Pro_CoExpression/output/data/3CA/Ovarian/common_genesets/Macrophage/hgsoc_Macrophage_TF_list.rds")
+
+
+####*Malignant####
+human_TF                           <- read.delim("Pro_CoExpression/data/Homo_sapiens_TF.txt",sep = "\t")
+human_TF_id                        <- human_TF$Symbol
+Malignant_TF_coexp                     <- Malignant_reliable_coexp_mat[rownames(Malignant_reliable_coexp_mat) %in% human_TF_id,]
+Malignant_TF_coexp                     <- Malignant_TF_coexp[rowSums(Malignant_TF_coexp != 0) > 0,]
+Ovarian_cancer_Malignant_TF                 <- list()
+for (j in 1:nrow(Malignant_TF_coexp)) {
+  non_zero_values         <- Malignant_TF_coexp[j, Malignant_TF_coexp[j, ] != 0]
+  sorted_values           <- sort(non_zero_values, decreasing = TRUE)
+  Ovarian_cancer_Malignant_TF      <- append(Ovarian_cancer_Malignant_TF, list(sorted_values))
+} 
+names(Ovarian_cancer_Malignant_TF)       <- rownames(Malignant_TF_coexp)
+
+
+lengths              <- sapply(Ovarian_cancer_Malignant_TF, length)
+top_indices          <- order(lengths, decreasing = TRUE)[1:100]
+Malignant_TF_meta        <- data.frame(
+  name = names(Ovarian_cancer_Malignant_TF)[top_indices],
+  length = lengths[top_indices])
+hgsoc_Malignant_TF_list   <- list(allTF=Ovarian_cancer_Malignant_TF)
+hgsoc_Malignant_TF_list   <- append(hgsoc_Malignant_TF_list,list(Top100_TF=Malignant_TF_meta))
+hgsoc_Malignant_TF_list   <- append(hgsoc_Malignant_TF_list,list(Malignant_TF_coexp = Malignant_TF_coexp))
+saveRDS(hgsoc_Malignant_TF_list,file = "Pro_CoExpression/output/data/3CA/Ovarian/common_genesets/Malignant/hgsoc_Malignant_TF_list.rds")
+
+####Pancreas cancer####
+####*T_cell####
+human_TF                           <- read.delim("Pro_CoExpression/data/Homo_sapiens_TF.txt",sep = "\t")
+human_TF_id                        <- human_TF$Symbol
+Tcell_TF_coexp                     <- Tcell_reliable_coexp_mat[rownames(Tcell_reliable_coexp_mat) %in% human_TF_id,]
+Tcell_TF_coexp                     <- Tcell_TF_coexp[rowSums(Tcell_TF_coexp != 0) > 0,]
+Pancreas_cancer_Tcell_TF                 <- list()
+for (j in 1:nrow(Tcell_TF_coexp)) {
+  non_zero_values         <- Tcell_TF_coexp[j, Tcell_TF_coexp[j, ] != 0]
+  sorted_values           <- sort(non_zero_values, decreasing = TRUE)
+  Pancreas_cancer_Tcell_TF      <- append(Pancreas_cancer_Tcell_TF, list(sorted_values))
+} 
+names(Pancreas_cancer_Tcell_TF)       <- rownames(Tcell_TF_coexp)
+
+
+lengths              <- sapply(Pancreas_cancer_Tcell_TF, length)
+top_indices          <- order(lengths, decreasing = TRUE)[1:100]
+Tcell_TF_meta        <- data.frame(
+  name = names(Pancreas_cancer_Tcell_TF)[top_indices],
+  length = lengths[top_indices])
+pdac_Tcell_TF_list   <- list(allTF=Pancreas_cancer_Tcell_TF)
+pdac_Tcell_TF_list   <- append(pdac_Tcell_TF_list,list(Top100_TF=Tcell_TF_meta))
+pdac_Tcell_TF_list   <- append(pdac_Tcell_TF_list,list(Tcell_TF_coexp = Tcell_TF_coexp))
+saveRDS(pdac_Tcell_TF_list,file = "Pro_CoExpression/output/data/3CA/Pancreas/common_genesets/T_cell/pdac_Tcell_TF_list.rds")
+
+####*B_cell####
+human_TF                           <- read.delim("Pro_CoExpression/data/Homo_sapiens_TF.txt",sep = "\t")
+human_TF_id                        <- human_TF$Symbol
+Bcell_TF_coexp                     <- Bcell_reliable_coexp_mat[rownames(Bcell_reliable_coexp_mat) %in% human_TF_id,]
+Bcell_TF_coexp                     <- Bcell_TF_coexp[rowSums(Bcell_TF_coexp != 0) > 0,]
+Pancreas_cancer_Bcell_TF                 <- list()
+for (j in 1:nrow(Bcell_TF_coexp)) {
+  non_zero_values         <- Bcell_TF_coexp[j, Bcell_TF_coexp[j, ] != 0]
+  sorted_values           <- sort(non_zero_values, decreasing = TRUE)
+  Pancreas_cancer_Bcell_TF      <- append(Pancreas_cancer_Bcell_TF, list(sorted_values))
+} 
+names(Pancreas_cancer_Bcell_TF)       <- rownames(Bcell_TF_coexp)
+
+
+lengths              <- sapply(Pancreas_cancer_Bcell_TF, length)
+top_indices          <- order(lengths, decreasing = TRUE)[1:100]
+Bcell_TF_meta        <- data.frame(
+  name = names(Pancreas_cancer_Bcell_TF)[top_indices],
+  length = lengths[top_indices])
+pdac_Bcell_TF_list   <- list(allTF=Pancreas_cancer_Bcell_TF)
+pdac_Bcell_TF_list   <- append(pdac_Bcell_TF_list,list(Top100_TF=Bcell_TF_meta))
+pdac_Bcell_TF_list   <- append(pdac_Bcell_TF_list,list(Bcell_TF_coexp = Bcell_TF_coexp))
+saveRDS(pdac_Bcell_TF_list,file = "Pro_CoExpression/output/data/3CA/Pancreas/common_genesets/B_cell/pdac_Bcell_TF_list.rds")
+
+
+####*Fibroblast####
+human_TF                           <- read.delim("Pro_CoExpression/data/Homo_sapiens_TF.txt",sep = "\t")
+human_TF_id                        <- human_TF$Symbol
+Fibroblast_TF_coexp                     <- Fibroblast_reliable_coexp_mat[rownames(Fibroblast_reliable_coexp_mat) %in% human_TF_id,]
+Fibroblast_TF_coexp                     <- Fibroblast_TF_coexp[rowSums(Fibroblast_TF_coexp != 0) > 0,]
+Pancreas_cancer_Fibroblast_TF                 <- list()
+for (j in 1:nrow(Fibroblast_TF_coexp)) {
+  non_zero_values         <- Fibroblast_TF_coexp[j, Fibroblast_TF_coexp[j, ] != 0]
+  sorted_values           <- sort(non_zero_values, decreasing = TRUE)
+  Pancreas_cancer_Fibroblast_TF      <- append(Pancreas_cancer_Fibroblast_TF, list(sorted_values))
+} 
+names(Pancreas_cancer_Fibroblast_TF)       <- rownames(Fibroblast_TF_coexp)
+
+
+lengths              <- sapply(Pancreas_cancer_Fibroblast_TF, length)
+top_indices          <- order(lengths, decreasing = TRUE)[1:100]
+Fibroblast_TF_meta        <- data.frame(
+  name = names(Pancreas_cancer_Fibroblast_TF)[top_indices],
+  length = lengths[top_indices])
+pdac_Fibroblast_TF_list   <- list(allTF=Pancreas_cancer_Fibroblast_TF)
+pdac_Fibroblast_TF_list   <- append(pdac_Fibroblast_TF_list,list(Top100_TF=Fibroblast_TF_meta))
+pdac_Fibroblast_TF_list   <- append(pdac_Fibroblast_TF_list,list(Fibroblast_TF_coexp = Fibroblast_TF_coexp))
+saveRDS(pdac_Fibroblast_TF_list,file = "Pro_CoExpression/output/data/3CA/Pancreas/common_genesets/Fibroblast/pdac_Fibroblast_TF_list.rds")
+
+
+####*Endothelial####
+human_TF                           <- read.delim("Pro_CoExpression/data/Homo_sapiens_TF.txt",sep = "\t")
+human_TF_id                        <- human_TF$Symbol
+Endothelial_TF_coexp                     <- Endothelial_reliable_coexp_mat[rownames(Endothelial_reliable_coexp_mat) %in% human_TF_id,]
+Endothelial_TF_coexp                     <- Endothelial_TF_coexp[rowSums(Endothelial_TF_coexp != 0) > 0,]
+Pancreas_cancer_Endothelial_TF                 <- list()
+for (j in 1:nrow(Endothelial_TF_coexp)) {
+  non_zero_values         <- Endothelial_TF_coexp[j, Endothelial_TF_coexp[j, ] != 0]
+  sorted_values           <- sort(non_zero_values, decreasing = TRUE)
+  Pancreas_cancer_Endothelial_TF      <- append(Pancreas_cancer_Endothelial_TF, list(sorted_values))
+} 
+names(Pancreas_cancer_Endothelial_TF)       <- rownames(Endothelial_TF_coexp)
+
+
+lengths              <- sapply(Pancreas_cancer_Endothelial_TF, length)
+top_indices          <- order(lengths, decreasing = TRUE)[1:100]
+Endothelial_TF_meta        <- data.frame(
+  name = names(Pancreas_cancer_Endothelial_TF)[top_indices],
+  length = lengths[top_indices])
+pdac_Endothelial_TF_list   <- list(allTF=Pancreas_cancer_Endothelial_TF)
+pdac_Endothelial_TF_list   <- append(pdac_Endothelial_TF_list,list(Top100_TF=Endothelial_TF_meta))
+pdac_Endothelial_TF_list   <- append(pdac_Endothelial_TF_list,list(Endothelial_TF_coexp = Endothelial_TF_coexp))
+saveRDS(pdac_Endothelial_TF_list,file = "Pro_CoExpression/output/data/3CA/Pancreas/common_genesets/Endothelial/pdac_Endothelial_TF_list.rds")
+
+
+####*Macrophage####
+human_TF                           <- read.delim("Pro_CoExpression/data/Homo_sapiens_TF.txt",sep = "\t")
+human_TF_id                        <- human_TF$Symbol
+Macrophage_TF_coexp                     <- Macrophage_reliable_coexp_mat[rownames(Macrophage_reliable_coexp_mat) %in% human_TF_id,]
+Macrophage_TF_coexp                     <- Macrophage_TF_coexp[rowSums(Macrophage_TF_coexp != 0) > 0,]
+Pancreas_cancer_Macrophage_TF                 <- list()
+for (j in 1:nrow(Macrophage_TF_coexp)) {
+  non_zero_values         <- Macrophage_TF_coexp[j, Macrophage_TF_coexp[j, ] != 0]
+  sorted_values           <- sort(non_zero_values, decreasing = TRUE)
+  Pancreas_cancer_Macrophage_TF      <- append(Pancreas_cancer_Macrophage_TF, list(sorted_values))
+} 
+names(Pancreas_cancer_Macrophage_TF)       <- rownames(Macrophage_TF_coexp)
+
+
+lengths              <- sapply(Pancreas_cancer_Macrophage_TF, length)
+top_indices          <- order(lengths, decreasing = TRUE)[1:100]
+Macrophage_TF_meta        <- data.frame(
+  name = names(Pancreas_cancer_Macrophage_TF)[top_indices],
+  length = lengths[top_indices])
+pdac_Macrophage_TF_list   <- list(allTF=Pancreas_cancer_Macrophage_TF)
+pdac_Macrophage_TF_list   <- append(pdac_Macrophage_TF_list,list(Top100_TF=Macrophage_TF_meta))
+pdac_Macrophage_TF_list   <- append(pdac_Macrophage_TF_list,list(Macrophage_TF_coexp = Macrophage_TF_coexp))
+saveRDS(pdac_Macrophage_TF_list,file = "Pro_CoExpression/output/data/3CA/Pancreas/common_genesets/Macrophage/pdac_Macrophage_TF_list.rds")
+
+
+
+####*Malignant####
+human_TF                           <- read.delim("Pro_CoExpression/data/Homo_sapiens_TF.txt",sep = "\t")
+human_TF_id                        <- human_TF$Symbol
+Malignant_TF_coexp                     <- Malignant_reliable_coexp_mat[rownames(Malignant_reliable_coexp_mat) %in% human_TF_id,]
+Malignant_TF_coexp                     <- Malignant_TF_coexp[rowSums(Malignant_TF_coexp != 0) > 0,]
+Pancreas_cancer_Malignant_TF                 <- list()
+for (j in 1:nrow(Malignant_TF_coexp)) {
+  non_zero_values         <- Malignant_TF_coexp[j, Malignant_TF_coexp[j, ] != 0]
+  sorted_values           <- sort(non_zero_values, decreasing = TRUE)
+  Pancreas_cancer_Malignant_TF      <- append(Pancreas_cancer_Malignant_TF, list(sorted_values))
+} 
+names(Pancreas_cancer_Malignant_TF)       <- rownames(Malignant_TF_coexp)
+
+
+lengths              <- sapply(Pancreas_cancer_Malignant_TF, length)
+top_indices          <- order(lengths, decreasing = TRUE)[1:100]
+Malignant_TF_meta        <- data.frame(
+  name = names(Pancreas_cancer_Malignant_TF)[top_indices],
+  length = lengths[top_indices])
+pdac_Malignant_TF_list   <- list(allTF=Pancreas_cancer_Malignant_TF)
+pdac_Malignant_TF_list   <- append(pdac_Malignant_TF_list,list(Top100_TF=Malignant_TF_meta))
+pdac_Malignant_TF_list   <- append(pdac_Malignant_TF_list,list(Malignant_TF_coexp = Malignant_TF_coexp))
+saveRDS(pdac_Malignant_TF_list,file = "Pro_CoExpression/output/data/3CA/Pancreas/common_genesets/Malignant/pdac_Malignant_TF_list.rds")
+
+
+####Kidney cancer####
+####*T_cell####
+human_TF                           <- read.delim("Pro_CoExpression/data/Homo_sapiens_TF.txt",sep = "\t")
+human_TF_id                        <- human_TF$Symbol
+Tcell_TF_coexp                     <- Tcell_reliable_coexp_mat[rownames(Tcell_reliable_coexp_mat) %in% human_TF_id,]
+Tcell_TF_coexp                     <- Tcell_TF_coexp[rowSums(Tcell_TF_coexp != 0) > 0,]
+Kidney_cancer_Tcell_TF                 <- list()
+for (j in 1:nrow(Tcell_TF_coexp)) {
+  non_zero_values         <- Tcell_TF_coexp[j, Tcell_TF_coexp[j, ] != 0]
+  sorted_values           <- sort(non_zero_values, decreasing = TRUE)
+  Kidney_cancer_Tcell_TF      <- append(Kidney_cancer_Tcell_TF, list(sorted_values))
+} 
+names(Kidney_cancer_Tcell_TF)       <- rownames(Tcell_TF_coexp)
+
+
+lengths              <- sapply(Kidney_cancer_Tcell_TF, length)
+top_indices          <- order(lengths, decreasing = TRUE)[1:100]
+Tcell_TF_meta        <- data.frame(
+  name = names(Kidney_cancer_Tcell_TF)[top_indices],
+  length = lengths[top_indices])
+rcc_Tcell_TF_list   <- list(allTF=Kidney_cancer_Tcell_TF)
+rcc_Tcell_TF_list   <- append(rcc_Tcell_TF_list,list(Top100_TF=Tcell_TF_meta))
+rcc_Tcell_TF_list   <- append(rcc_Tcell_TF_list,list(Tcell_TF_coexp = Tcell_TF_coexp))
+saveRDS(rcc_Tcell_TF_list,file = "Pro_CoExpression/output/data/3CA/Kidney/common_genesets/T_cell/rcc_Tcell_TF_list.rds")
+
+
+####*B_cell####
+human_TF                           <- read.delim("Pro_CoExpression/data/Homo_sapiens_TF.txt",sep = "\t")
+human_TF_id                        <- human_TF$Symbol
+Bcell_TF_coexp                     <- Bcell_reliable_coexp_mat[rownames(Bcell_reliable_coexp_mat) %in% human_TF_id,]
+Bcell_TF_coexp                     <- Bcell_TF_coexp[rowSums(Bcell_TF_coexp != 0) > 0,]
+Kidney_cancer_Bcell_TF                 <- list()
+for (j in 1:nrow(Bcell_TF_coexp)) {
+  non_zero_values         <- Bcell_TF_coexp[j, Bcell_TF_coexp[j, ] != 0]
+  sorted_values           <- sort(non_zero_values, decreasing = TRUE)
+  Kidney_cancer_Bcell_TF      <- append(Kidney_cancer_Bcell_TF, list(sorted_values))
+} 
+names(Kidney_cancer_Bcell_TF)       <- rownames(Bcell_TF_coexp)
+
+
+lengths              <- sapply(Kidney_cancer_Bcell_TF, length)
+top_indices          <- order(lengths, decreasing = TRUE)[1:100]
+Bcell_TF_meta        <- data.frame(
+  name = names(Kidney_cancer_Bcell_TF)[top_indices],
+  length = lengths[top_indices])
+rcc_Bcell_TF_list   <- list(allTF=Kidney_cancer_Bcell_TF)
+rcc_Bcell_TF_list   <- append(rcc_Bcell_TF_list,list(Top100_TF=Bcell_TF_meta))
+rcc_Bcell_TF_list   <- append(rcc_Bcell_TF_list,list(Bcell_TF_coexp = Bcell_TF_coexp))
+saveRDS(rcc_Bcell_TF_list,file = "Pro_CoExpression/output/data/3CA/Kidney/common_genesets/B_cell/rcc_Bcell_TF_list.rds")
+
+####*Fibroblast####
+human_TF                           <- read.delim("Pro_CoExpression/data/Homo_sapiens_TF.txt",sep = "\t")
+human_TF_id                        <- human_TF$Symbol
+Fibroblast_TF_coexp                         <- Fibroblast_reliable_coexp_mat[rownames(Fibroblast_reliable_coexp_mat) %in% human_TF_id,]
+Fibroblast_TF_coexp                         <- Fibroblast_TF_coexp[rowSums(Fibroblast_TF_coexp != 0) > 0,]
+Kidney_cancer_Fibroblast_TF                 <- list()
+for (j in 1:nrow(Fibroblast_TF_coexp)) {
+  non_zero_values         <- Fibroblast_TF_coexp[j, Fibroblast_TF_coexp[j, ] != 0]
+  sorted_values           <- sort(non_zero_values, decreasing = TRUE)
+  Kidney_cancer_Fibroblast_TF      <- append(Kidney_cancer_Fibroblast_TF, list(sorted_values))
+} 
+names(Kidney_cancer_Fibroblast_TF)       <- rownames(Fibroblast_TF_coexp)
+
+
+lengths              <- sapply(Kidney_cancer_Fibroblast_TF, length)
+top_indices          <- order(lengths, decreasing = TRUE)[1:100]
+Fibroblast_TF_meta        <- data.frame(
+  name = names(Kidney_cancer_Fibroblast_TF)[top_indices],
+  length = lengths[top_indices])
+rcc_Fibroblast_TF_list   <- list(allTF=Kidney_cancer_Fibroblast_TF)
+rcc_Fibroblast_TF_list   <- append(rcc_Fibroblast_TF_list,list(Top100_TF=Fibroblast_TF_meta))
+rcc_Fibroblast_TF_list   <- append(rcc_Fibroblast_TF_list,list(Fibroblast_TF_coexp = Fibroblast_TF_coexp))
+saveRDS(rcc_Fibroblast_TF_list,file = "Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Fibroblast/rcc_Fibroblast_TF_list.rds")
+
+
+####*Endothelial####
+human_TF                           <- read.delim("Pro_CoExpression/data/Homo_sapiens_TF.txt",sep = "\t")
+human_TF_id                        <- human_TF$Symbol
+Endothelial_TF_coexp                     <- Endothelial_reliable_coexp_mat[rownames(Endothelial_reliable_coexp_mat) %in% human_TF_id,]
+Endothelial_TF_coexp                     <- Endothelial_TF_coexp[rowSums(Endothelial_TF_coexp != 0) > 0,]
+Kidney_cancer_Endothelial_TF                 <- list()
+for (j in 1:nrow(Endothelial_TF_coexp)) {
+  non_zero_values         <- Endothelial_TF_coexp[j, Endothelial_TF_coexp[j, ] != 0]
+  sorted_values           <- sort(non_zero_values, decreasing = TRUE)
+  Kidney_cancer_Endothelial_TF      <- append(Kidney_cancer_Endothelial_TF, list(sorted_values))
+} 
+names(Kidney_cancer_Endothelial_TF)       <- rownames(Endothelial_TF_coexp)
+
+
+lengths              <- sapply(Kidney_cancer_Endothelial_TF, length)
+top_indices          <- order(lengths, decreasing = TRUE)[1:100]
+Endothelial_TF_meta        <- data.frame(
+  name = names(Kidney_cancer_Endothelial_TF)[top_indices],
+  length = lengths[top_indices])
+rcc_Endothelial_TF_list   <- list(allTF=Kidney_cancer_Endothelial_TF)
+rcc_Endothelial_TF_list   <- append(rcc_Endothelial_TF_list,list(Top100_TF=Endothelial_TF_meta))
+rcc_Endothelial_TF_list   <- append(rcc_Endothelial_TF_list,list(Endothelial_TF_coexp = Endothelial_TF_coexp))
+saveRDS(rcc_Endothelial_TF_list,file = "Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Endothelial/rcc_Endothelial_TF_list.rds")
+
+####*Macrophage####
+human_TF                           <- read.delim("Pro_CoExpression/data/Homo_sapiens_TF.txt",sep = "\t")
+human_TF_id                        <- human_TF$Symbol
+Macrophage_TF_coexp                     <- Macrophage_reliable_coexp_mat[rownames(Macrophage_reliable_coexp_mat) %in% human_TF_id,]
+Macrophage_TF_coexp                     <- Macrophage_TF_coexp[rowSums(Macrophage_TF_coexp != 0) > 0,]
+Kidney_cancer_Macrophage_TF                 <- list()
+for (j in 1:nrow(Macrophage_TF_coexp)) {
+  non_zero_values         <- Macrophage_TF_coexp[j, Macrophage_TF_coexp[j, ] != 0]
+  sorted_values           <- sort(non_zero_values, decreasing = TRUE)
+  Kidney_cancer_Macrophage_TF      <- append(Kidney_cancer_Macrophage_TF, list(sorted_values))
+} 
+names(Kidney_cancer_Macrophage_TF)       <- rownames(Macrophage_TF_coexp)
+
+
+lengths              <- sapply(Kidney_cancer_Macrophage_TF, length)
+top_indices          <- order(lengths, decreasing = TRUE)[1:100]
+Macrophage_TF_meta        <- data.frame(
+  name = names(Kidney_cancer_Macrophage_TF)[top_indices],
+  length = lengths[top_indices])
+rcc_Macrophage_TF_list   <- list(allTF=Kidney_cancer_Macrophage_TF)
+rcc_Macrophage_TF_list   <- append(rcc_Macrophage_TF_list,list(Top100_TF=Macrophage_TF_meta))
+rcc_Macrophage_TF_list   <- append(rcc_Macrophage_TF_list,list(Macrophage_TF_coexp = Macrophage_TF_coexp))
+saveRDS(rcc_Macrophage_TF_list,file = "Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Macrophage/rcc_Macrophage_TF_list.rds")
+
+
+####*Malignant####
+human_TF                           <- read.delim("Pro_CoExpression/data/Homo_sapiens_TF.txt",sep = "\t")
+human_TF_id                        <- human_TF$Symbol
+Malignant_TF_coexp                     <- Malignant_reliable_coexp_mat[rownames(Malignant_reliable_coexp_mat) %in% human_TF_id,]
+Malignant_TF_coexp                     <- Malignant_TF_coexp[rowSums(Malignant_TF_coexp != 0) > 0,]
+Kidney_cancer_Malignant_TF                 <- list()
+for (j in 1:nrow(Malignant_TF_coexp)) {
+  non_zero_values         <- Malignant_TF_coexp[j, Malignant_TF_coexp[j, ] != 0]
+  sorted_values           <- sort(non_zero_values, decreasing = TRUE)
+  Kidney_cancer_Malignant_TF      <- append(Kidney_cancer_Malignant_TF, list(sorted_values))
+} 
+names(Kidney_cancer_Malignant_TF)       <- rownames(Malignant_TF_coexp)
+
+
+lengths              <- sapply(Kidney_cancer_Malignant_TF, length)
+top_indices          <- order(lengths, decreasing = TRUE)[1:100]
+Malignant_TF_meta        <- data.frame(
+  name = names(Kidney_cancer_Malignant_TF)[top_indices],
+  length = lengths[top_indices])
+rcc_Malignant_TF_list   <- list(allTF=Kidney_cancer_Malignant_TF)
+rcc_Malignant_TF_list   <- append(rcc_Malignant_TF_list,list(Top100_TF=Malignant_TF_meta))
+rcc_Malignant_TF_list   <- append(rcc_Malignant_TF_list,list(Malignant_TF_coexp = Malignant_TF_coexp))
+saveRDS(rcc_Malignant_TF_list,file = "Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Malignant/rcc_Malignant_TF_list.rds")
+
+
+
+
+
+
+######get a data frame for all TFs#####
+#BRCA
+celltype             <- c("Tcell","Bcell","Fibroblast","Endothelial","Macrophage","Malignant")
+library(foreach)
+brca_TF_result       <- foreach(i =celltype )%do%{
+brca_TF_list         <- readRDS(paste0("Pro_CoExpression/output/data/3CA/Breast/common_genesets/",i,"/brca_",i,"_TF_list.rds"))
+brca_TF              <- brca_TF_list$allTF
+lengths              <- sapply(brca_TF, length)
+top_indices          <- order(lengths, decreasing = TRUE)
+brca_TF_meta         <- data.frame(
+  name = names(brca_TF),
+  length = lengths[top_indices])
+return(brca_TF_meta)
+}
+
+#HCC
+celltype               <- c("Tcell","Bcell","Fibroblast","Endothelial","Macrophage","Hepatocyte")
+library(foreach)
+hcc_TF_result          <- foreach(i =celltype )%do%{
+  hcc_TF_list          <- readRDS(paste0("Pro_CoExpression/output/data/3CA/Liver/common_genesets/",i,"/hcc_",i,"_TF_list.rds"))
+  hcc_TF               <- hcc_TF_list$allTF
+  lengths              <- sapply(hcc_TF, length)
+  top_indices          <- order(lengths, decreasing = TRUE)
+  hcc_TF_meta          <- data.frame(
+    name = names(hcc_TF),
+    length = lengths[top_indices])
+  return(hcc_TF_meta)
+}
+
+#HGSOC
+celltype               <- c("Tcell","Bcell","Fibroblast","Endothelial","Macrophage","Malignant")
+library(foreach)
+hgsoc_TF_result        <- foreach(i =celltype )%do%{
+  hgsoc_TF_list        <- readRDS(paste0("Pro_CoExpression/output/data/3CA/Ovarian/common_genesets/",i,"/hgsoc_",i,"_TF_list.rds"))
+  hgsoc_TF             <- hgsoc_TF_list$allTF
+  lengths              <- sapply(hgsoc_TF, length)
+  top_indices          <- order(lengths, decreasing = TRUE)
+  hgsoc_TF_meta        <- data.frame(
+    name = names(hgsoc_TF),
+    length = lengths[top_indices])
+  return(hgsoc_TF_meta)
+}
+#PDAC
+celltype               <- c("Tcell","Bcell","Fibroblast","Endothelial","Macrophage","Malignant")
+library(foreach)
+pdac_TF_result         <- foreach(i =celltype )%do%{
+  pdac_TF_list         <- readRDS(paste0("Pro_CoExpression/output/data/3CA/Pancreas/common_genesets/",i,"/pdac_",i,"_TF_list.rds"))
+  pdac_TF              <- pdac_TF_list$allTF
+  lengths              <- sapply(pdac_TF, length)
+  top_indices          <- order(lengths, decreasing = TRUE)
+  pdac_TF_meta         <- data.frame(
+    name = names(pdac_TF),
+    length = lengths[top_indices])
+  return(pdac_TF_meta)
+}
+
+#RCC
+celltype               <- c("Tcell","Bcell","Fibroblast","Endothelial","Macrophage","Malignant")
+library(foreach)
+rcc_TF_result          <- foreach(i =celltype )%do%{
+  rcc_TF_list          <- readRDS(paste0("Pro_CoExpression/output/data/3CA/Kidney/common_genesets/",i,"/rcc_",i,"_TF_list.rds"))
+  rcc_TF               <- rcc_TF_list$allTF
+  lengths              <- sapply(rcc_TF, length)
+  top_indices          <- order(lengths, decreasing = TRUE)
+  rcc_TF_meta          <- data.frame(
+    name = names(rcc_TF),
+    length = lengths[top_indices])
+  return(rcc_TF_meta)
+}
+
+library(dplyr)
+library(tibble)
+df.list                      <- c(brca_TF_result,hcc_TF_result,hgsoc_TF_result,pdac_TF_result,rcc_TF_result)
+TF_result                    <- Reduce(function(x,y)full_join(x,y,by="name"),df.list)
+TF_result[is.na(TF_result)]  <- 0
+colnames(TF_result)[2:31]    <- paste0("length",1:30)
+rown                         <- TF_result$name
+TF_result                    <- column_to_rownames(TF_result,var = "name")
+TF_result                    <- as.matrix(TF_result)
+TF_meta                      <- data.frame(length=colnames(TF_result),
+                              Tumor=c(rep("Breast cancer",6),
+                              rep("Liver cancer",6),
+                              rep("Ovarian cancer",6),
+                              rep("Pancreas cancer",6),rep("Kidney cancer",6)),
+                              Celltype= rep(celltype,5))
+TF_meta                      <- column_to_rownames(TF_meta,var = "length")
+save(TF_result,file="Pro_CoExpression/output/results/data/TF_result.RData")
+save(TF_meta,file = "Pro_CoExpression/output/results/data/TF_meta.RData")
