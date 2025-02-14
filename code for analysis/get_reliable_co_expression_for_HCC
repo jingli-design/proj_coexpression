@@ -1,0 +1,868 @@
+###############################################################
+####get reliable co-expression for hepatocellular carcinoma####
+###############################################################
+
+
+####tumor tissue####
+####*T_cell####
+#select co-expressed gene pairs
+dataset_list                        <- list("Ma2019","Sharma2020","Zhang2019","Zhang2017")
+process_data_for_files             <- function(dataset_list) {
+  Tcell_matrix_list                      <- list()
+  for ( dataset_id in dataset_list) {
+    tryCatch({
+    cor_file_path                        <- paste0("~/Pro_CoExpression/output/data/3CA/Liver/",dataset_id,"_Liver/",dataset_id,"_tumor_CSCORE_cor.rds")
+    padj_file_path                       <- paste0("~/Pro_CoExpression/output/data/3CA/Liver/",dataset_id,"_Liver/",dataset_id,"_tumor_CSCORE_padj.rds")
+      Tcell_cor                         <- readRDS(cor_file_path)$T_cell
+      Tcell_padj                        <- readRDS(padj_file_path)$T_cell
+      Tcell_cor[Tcell_padj > 0.05]      <- 0
+      Tcell_matrix_list                           <- append(Tcell_matrix_list,(list(Tcell_cor)))
+    },error=function(e){message(paste("Error processing dataset", dataset_id, ": ", e$message))
+    })
+  }
+  return(Tcell_matrix_list)
+}
+Tcell_matrix_list         <- process_data_for_files(dataset_list)
+names(Tcell_matrix_list)  <- unlist(dataset_list[-1])
+
+####merge the resluts of all datasets
+library(dplyr)
+library(tidyr)
+all_pairs         <- data.frame(row = character(), col = character(), value = numeric(), stringsAsFactors = FALSE)
+for (mat in Tcell_matrix_list) {
+  mat[lower.tri(mat)] <- NA
+  temp_data       <- as.data.frame(which(!is.na(mat), arr.ind = TRUE))
+  temp_data$value <- mat[!is.na(mat)]
+  temp_data$gene1 <- rownames(mat)[temp_data$row]
+  temp_data$gene2 <- colnames(mat)[temp_data$col]
+  all_pairs       <- rbind(all_pairs, temp_data)
+}
+
+#### Count the frequency of occurrence of each gene pair
+Tcell_tumor_Liver_pair_counts <- all_pairs %>%
+  group_by(gene1, gene2) %>%
+  summarise(count = n(), median_value = median(value, na.rm = TRUE),.groups = "drop") %>%
+  filter(count >= 2)  # Select gene pairs that appear in at least two matrices
+saveRDS(Tcell_tumor_Liver_pair_counts,file="Pro_CoExpression/output/data/3CA/Liver/common_genesets/T_cell/Tcell_tumor_Liver_pair_counts.rds")
+
+library(ggplot2)
+ggplot(Tcell_tumor_Liver_pair_counts, aes(y = median_value)) + 
+  geom_boxplot(outlier.colour = "red", outlier.shape = 16, outlier.size = 1) +
+  theme_minimal()
+stats               <- boxplot.stats(Tcell_tumor_Liver_pair_counts$median_value)
+outlier               <- stats$out
+
+Q1                       <- quantile(Tcell_tumor_Liver_pair_counts$median_value, 0.25)
+Q3                       <- quantile(Tcell_tumor_Liver_pair_counts$median_value, 0.75)
+IQR                      <- Q3 - Q1
+threshold                <- Q3 + 1.5 * IQR #0
+Tcell_reliable_coexp     <- Tcell_tumor_Liver_pair_counts[abs(Tcell_tumor_Liver_pair_counts$median_value) > threshold, ]
+Tcell_tumor_liver_reliable_coexp_df  <- Tcell_reliable_coexp
+#400150
+saveRDS(Tcell_tumor_liver_reliable_coexp_df,file = "Pro_CoExpression/output/data/3CA/Liver/common_genesets/T_cell/Tcell_tumor_liver_reliable_coexp_df.rds")
+####Convert data frame into matrixs
+library(data.table)
+genes                                         <- unique(c(Tcell_tumor_liver_reliable_coexp_df$gene1, Tcell_tumor_liver_reliable_coexp_df$gene2))
+corr_matrix                                   <- matrix(NA, nrow = length(genes), ncol = length(genes), dimnames = list(genes, genes))
+Tcell_tumor_liver_reliable_coexp_df_dt                     <- as.data.table(Tcell_tumor_liver_reliable_coexp_df)
+#Create an index mapping
+gene_index                                    <- setNames(seq_along(genes), genes)
+#Fill the correlation matrix with vectorization operation
+row_indices                                   <- gene_index[Tcell_tumor_liver_reliable_coexp_df_dt$gene1]
+col_indices                                   <- gene_index[Tcell_tumor_liver_reliable_coexp_df_dt$gene2]
+corr_matrix[cbind(row_indices, col_indices)]  <- Tcell_tumor_liver_reliable_coexp_df_dt$median_value
+corr_matrix[cbind(col_indices, row_indices)]  <- Tcell_tumor_liver_reliable_coexp_df_dt$median_value
+Tcell_tumor_Liver_pair_corr_matrix                   <- corr_matrix
+Tcell_tumor_Liver_pair_corr_matrix[is.na(Tcell_tumor_Liver_pair_corr_matrix)] <- 0
+Tcell_tumor_liver_reliable_coexp_mat                 <- Tcell_tumor_Liver_pair_corr_matrix
+saveRDS(Tcell_tumor_liver_reliable_coexp_mat,file="Pro_CoExpression/output/data/3CA/Liver/common_genesets/T_cell/Tcell_tumor_liver_reliable_coexp_mat.rds")
+
+####*B_cell####
+#select co-expressed gene pairs
+dataset_list                       <- list("Ma2019","Sharma2020","Zhang2019","Zhang2017")
+process_data_for_files             <- function(dataset_list) {
+  Bcell_matrix_list                      <- list()
+  for ( dataset_id in dataset_list) {
+    tryCatch({
+      cor_file_path                        <- paste0("~/Pro_CoExpression/output/data/3CA/Liver/",dataset_id,"_Liver/",dataset_id,"_tumor_CSCORE_cor.rds")
+      padj_file_path                       <- paste0("~/Pro_CoExpression/output/data/3CA/Liver/",dataset_id,"_Liver/",dataset_id,"_tumor_CSCORE_padj.rds")
+      Bcell_cor                         <- readRDS(cor_file_path)$B_cell
+      Bcell_padj                        <- readRDS(padj_file_path)$B_cell
+      Bcell_cor[Bcell_padj > 0.05]      <- 0
+      Bcell_matrix_list                           <- append(Bcell_matrix_list,(list(Bcell_cor)))
+    },error=function(e){message(paste("Error processing dataset", dataset_id, ": ", e$message))
+    })
+  }
+  return(Bcell_matrix_list)
+}
+Bcell_matrix_list         <- process_data_for_files(dataset_list)
+Bcell_matrix_list         <- Bcell_matrix_list[-3]
+names(Bcell_matrix_list)  <- unlist(dataset_list[-c(1,4)])
+
+####merge the resluts of all datasets
+library(dplyr)
+library(tidyr)
+all_pairs         <- data.frame(row = character(), col = character(), value = numeric(), stringsAsFactors = FALSE)
+for (mat in Bcell_matrix_list) {
+  mat[lower.tri(mat)] <- NA
+  temp_data       <- as.data.frame(which(!is.na(mat), arr.ind = TRUE))
+  temp_data$value <- mat[!is.na(mat)]
+  temp_data$gene1 <- rownames(mat)[temp_data$row]
+  temp_data$gene2 <- colnames(mat)[temp_data$col]
+  all_pairs       <- rbind(all_pairs, temp_data)
+}
+
+#### Count the frequency of occurrence of each gene pair
+Bcell_tumor_Liver_reliable_coexp_df <- all_pairs %>%
+  group_by(gene1, gene2) %>%
+  summarise(count = n(), median_value = median(value, na.rm = TRUE),.groups = "drop") %>%
+  filter(count >= 2)  # Select gene pairs that appear in at least two matrices
+saveRDS(Bcell_tumor_Liver_reliable_coexp_df,file="Pro_CoExpression/output/data/3CA/Liver/common_genesets/B_cell/Bcell_tumor_Liver_reliable_coexp_df.rds")
+
+
+library(ggplot2)
+ggplot(Bcell_tumor_Liver_pair_counts, aes(y = median_value)) + 
+  geom_boxplot(outlier.colour = "red", outlier.shape = 16, outlier.size = 1) +
+  theme_minimal()
+stats               <- boxplot.stats(Bcell_tumor_Liver_pair_counts$median_value)
+outlier             <- stats$out
+
+Q1                    <- quantile(Bcell_tumor_Liver_pair_counts$median_value, 0.25)
+Q3                    <- quantile(Bcell_tumor_Liver_pair_counts$median_value, 0.75)
+IQR                   <- Q3 - Q1
+threshold_1           <- Q3 + 1.5 * IQR #0.859
+threshold_2           <- Q1 - 1.5*IQR  #-0.515
+Bcell_tumor_Liver_reliable_coexp  <- Bcell_tumor_Liver_pair_counts[Bcell_tumor_Liver_pair_counts$median_value > threshold_1 |
+                                             Bcell_tumor_Liver_pair_counts$median_value < threshold_2, ]
+#3025
+Bcell_tumor_Liver_reliable_coexp_df    <- Bcell_tumor_Liver_reliable_coexp
+save(Bcell_tumor_Liver_reliable_coexp_df,file = "Pro_CoExpression/output/data/3CA/Liver/common_genesets/B_cell/Bcell_tumor_Liver_reliable_coexp_df.RData")
+
+
+####Convert data frame into matrixs
+library(data.table)
+genes                                         <- unique(c(Bcell_tumor_Liver_reliable_coexp_df$gene1, Bcell_tumor_Liver_reliable_coexp_df$gene2))
+corr_matrix                                   <- matrix(NA, nrow = length(genes), ncol = length(genes), dimnames = list(genes, genes))
+Bcell_tumor_Liver_reliable_coexp_df_dt                     <- as.data.table(Bcell_tumor_Liver_reliable_coexp_df)
+#Create an index mapping
+gene_index                                    <- setNames(seq_along(genes), genes)
+#Fill the correlation matrix with vectorization operation
+row_indices                                   <- gene_index[Bcell_tumor_Liver_reliable_coexp_df_dt$gene1]
+col_indices                                   <- gene_index[Bcell_tumor_Liver_reliable_coexp_df_dt$gene2]
+corr_matrix[cbind(row_indices, col_indices)]  <- Bcell_tumor_Liver_reliable_coexp_df_dt$median_value
+corr_matrix[cbind(col_indices, row_indices)]  <- Bcell_tumor_Liver_reliable_coexp_df_dt$median_value
+Bcell_tumor_Liver_pair_corr_matrix                   <- corr_matrix
+Bcell_tumor_Liver_pair_corr_matrix[is.na(Bcell_tumor_Liver_pair_corr_matrix)] <- 0
+Bcell_tumor_Liver_reliable_coexp_mat  <- Bcell_tumor_Liver_pair_corr_matrix
+saveRDS(Bcell_tumor_Liver_reliable_coexp_mat,file="Pro_CoExpression/output/data/3CA/Liver/common_genesets/B_cell/Bcell_tumor_Liver_reliable_coexp_mat.rds")
+
+####*Fibroblast####
+#select co-expressed gene pairs
+dataset_list                       <- list("Ma2019","Sharma2020","Zhang2019","Zhang2017")
+process_data_for_files             <- function(dataset_list) {
+  Fibroblast_matrix_list                      <- list()
+  for ( dataset_id in dataset_list) {
+    tryCatch({
+      cor_file_path                        <- paste0("~/Pro_CoExpression/output/data/3CA/Liver/",dataset_id,"_Liver/",dataset_id,"_tumor_CSCORE_cor.rds")
+      padj_file_path                       <- paste0("~/Pro_CoExpression/output/data/3CA/Liver/",dataset_id,"_Liver/",dataset_id,"_tumor_CSCORE_padj.rds")
+      Fibroblast_cor                         <- readRDS(cor_file_path)$Fibroblast
+      Fibroblast_padj                        <- readRDS(padj_file_path)$Fibroblast
+      Fibroblast_cor[Fibroblast_padj > 0.05]      <- 0
+      Fibroblast_matrix_list                           <- append(Fibroblast_matrix_list,(list(Fibroblast_cor)))
+    },error=function(e){message(paste("Error processing dataset", dataset_id, ": ", e$message))
+    })
+  }
+  return(Fibroblast_matrix_list)
+}
+Fibroblast_matrix_list         <- process_data_for_files(dataset_list)
+Fibroblast_matrix_list         <- Fibroblast_matrix_list[-c(2,3)]
+names(Fibroblast_matrix_list)  <- unlist(dataset_list[2])
+####Ma2019
+Ma2019_Fibroblast_tumor_cor <- readRDS("Pro_CoExpression/output/data/3CA/Liver/Ma2019_Liver/Ma2019_CSCORE_cor.rds")$Fibroblast
+Ma2019_Fibroblast_tumor_padj  <- readRDS("Pro_CoExpression/output/data/3CA/Liver/Ma2019_Liver/Ma2019_CSCORE_padj.rds")$Fibroblast
+Ma2019_Fibroblast_tumor_cor[Ma2019_Fibroblast_tumor_padj>0.05] <- 0
+Fibroblast_matrix_list  <- append(Fibroblast_matrix_list,list(Ma2019_Fibroblast_tumor_cor))
+names(Fibroblast_matrix_list)[2]  <- "Ma2019"
+####merge the resluts of all datasets
+library(dplyr)
+library(tidyr)
+all_pairs         <- data.frame(row = character(), col = character(), value = numeric(), stringsAsFactors = FALSE)
+for (mat in Fibroblast_matrix_list) {
+  mat[lower.tri(mat)] <- NA
+  temp_data       <- as.data.frame(which(!is.na(mat), arr.ind = TRUE))
+  temp_data$value <- mat[!is.na(mat)]
+  temp_data$gene1 <- rownames(mat)[temp_data$row]
+  temp_data$gene2 <- colnames(mat)[temp_data$col]
+  all_pairs       <- rbind(all_pairs, temp_data)
+}
+
+#### Count the frequency of occurrence of each gene pair
+Fibroblast_tumor_Liver_pair_counts <- all_pairs %>%
+  group_by(gene1, gene2) %>%
+  summarise(count = n(), median_value = median(value, na.rm = TRUE),.groups = "drop") %>%
+  filter(count >= 2)  # Select gene pairs that appear in at least two matrices
+saveRDS(Fibroblast_tumor_Liver_pair_counts,file="Pro_CoExpression/output/data/3CA/Liver/common_genesets/Fibroblast/Fibroblast_tumor_Liver_pair_counts.rds")
+hist(Fibroblast_tumor_Liver_pair_counts$median_value,breaks = 40)
+length(which(abs(Fibroblast_tumor_Liver_pair_counts$median_value) >= 0.5))
+library(ggplot2)
+ggplot(Fibroblast_tumor_Liver_pair_counts, aes(y = median_value)) + 
+  geom_boxplot(outlier.colour = "red", outlier.shape = 16, outlier.size = 1) +
+  theme_minimal()
+stats               <- boxplot.stats(Fibroblast_tumor_Liver_pair_counts$median_value)
+outlier             <- stats$out
+
+Q1                    <- quantile(Fibroblast_tumor_Liver_pair_counts$median_value, 0.25)
+Q3                    <- quantile(Fibroblast_tumor_Liver_pair_counts$median_value, 0.75)
+IQR                   <- Q3 - Q1
+threshold_1           <- Q3 + 1.5 * IQR #0
+threshold_2           <- Q1 - 1.5*IQR  #0
+Fibroblast_tumor_Liver_reliable_coexp  <- Fibroblast_tumor_Liver_pair_counts[Fibroblast_tumor_Liver_pair_counts$median_value > threshold_1 |
+                                                                               Fibroblast_tumor_Liver_pair_counts$median_value < threshold_2, ]
+#150341
+Fibroblast_tumor_Liver_reliable_coexp_df    <- Fibroblast_tumor_Liver_reliable_coexp
+save(Fibroblast_tumor_Liver_reliable_coexp_df,file = "Pro_CoExpression/output/data/3CA/Liver/common_genesets/Fibroblast/Fibroblast_tumor_Liver_reliable_coexp_df.RData")
+
+
+####Convert data frame into matrixs
+library(data.table)
+genes                                         <- unique(c(Fibroblast_tumor_Liver_reliable_coexp_df$gene1, Fibroblast_tumor_Liver_reliable_coexp_df$gene2))
+corr_matrix                                   <- matrix(NA, nrow = length(genes), ncol = length(genes), dimnames = list(genes, genes))
+Fibroblast_tumor_Liver_reliable_coexp_df_dt                     <- as.data.table(Fibroblast_tumor_Liver_reliable_coexp_df)
+#Create an index mapping
+gene_index                                    <- setNames(seq_along(genes), genes)
+#Fill the correlation matrix with vectorization operation
+row_indices                                   <- gene_index[Fibroblast_tumor_Liver_reliable_coexp_df_dt$gene1]
+col_indices                                   <- gene_index[Fibroblast_tumor_Liver_reliable_coexp_df_dt$gene2]
+corr_matrix[cbind(row_indices, col_indices)]  <- Fibroblast_tumor_Liver_reliable_coexp_df_dt$median_value
+corr_matrix[cbind(col_indices, row_indices)]  <- Fibroblast_tumor_Liver_reliable_coexp_df_dt$median_value
+Fibroblast_tumor_Liver_pair_corr_matrix                   <- corr_matrix
+Fibroblast_tumor_Liver_pair_corr_matrix[is.na(Fibroblast_tumor_Liver_pair_corr_matrix)] <- 0
+Fibroblast_tumor_Liver_reliable_coexp_mat  <- Fibroblast_tumor_Liver_pair_corr_matrix
+saveRDS(Fibroblast_tumor_Liver_reliable_coexp_mat,file="Pro_CoExpression/output/data/3CA/Liver/common_genesets/Fibroblast/Fibroblast_tumor_Liver_reliable_coexp_mat.rds")
+
+####*Endothelial####
+#select co-expressed gene pairs
+dataset_list                       <- list("Ma2019","Sharma2020","Zhang2019","Zhang2017")
+process_data_for_files             <- function(dataset_list) {
+  Endothelial_matrix_list                      <- list()
+  for ( dataset_id in dataset_list) {
+    tryCatch({
+      cor_file_path                        <- paste0("~/Pro_CoExpression/output/data/3CA/Liver/",dataset_id,"_Liver/",dataset_id,"_tumor_CSCORE_cor.rds")
+      padj_file_path                       <- paste0("~/Pro_CoExpression/output/data/3CA/Liver/",dataset_id,"_Liver/",dataset_id,"_tumor_CSCORE_padj.rds")
+      Endothelial_cor                         <- readRDS(cor_file_path)$Endothelial
+      Endothelial_padj                        <- readRDS(padj_file_path)$Endothelial
+      Endothelial_cor[Endothelial_padj > 0.05]      <- 0
+      Endothelial_matrix_list                           <- append(Endothelial_matrix_list,(list(Endothelial_cor)))
+    },error=function(e){message(paste("Error processing dataset", dataset_id, ": ", e$message))
+    })
+  }
+  return(Endothelial_matrix_list)
+}
+Endothelial_matrix_list         <- process_data_for_files(dataset_list)
+Endothelial_matrix_list         <- Endothelial_matrix_list[-c(2,3)]
+names(Endothelial_matrix_list)  <- unlist(dataset_list[2])
+####Ma2019
+Ma2019_Endothelial_tumor_cor    <- readRDS("Pro_CoExpression/output/data/3CA/Liver/Ma2019_Liver/Ma2019_CSCORE_cor.rds")$Endothelial
+Ma2019_Endothelial_tumor_padj   <- readRDS("Pro_CoExpression/output/data/3CA/Liver/Ma2019_Liver/Ma2019_CSCORE_padj.rds")$Endothelial
+Ma2019_Endothelial_tumor_cor[Ma2019_Endothelial_tumor_padj>0.05] <- 0
+Endothelial_matrix_list            <- append(Endothelial_matrix_list,list(Ma2019_Endothelial_tumor_cor))
+names(Endothelial_matrix_list)[2]  <- "Ma2019"
+
+####merge the resluts of all datasets
+library(dplyr)
+library(tidyr)
+all_pairs         <- data.frame(row = character(), col = character(), value = numeric(), stringsAsFactors = FALSE)
+for (mat in Endothelial_matrix_list) {
+  mat[lower.tri(mat)] <- NA
+  temp_data       <- as.data.frame(which(!is.na(mat), arr.ind = TRUE))
+  temp_data$value <- mat[!is.na(mat)]
+  temp_data$gene1 <- rownames(mat)[temp_data$row]
+  temp_data$gene2 <- colnames(mat)[temp_data$col]
+  all_pairs       <- rbind(all_pairs, temp_data)
+}
+
+#### Count the frequency of occurrence of each gene pair
+Endothelial_tumor_Liver_pair_counts <- all_pairs %>%
+  group_by(gene1, gene2) %>%
+  summarise(count = n(), median_value = median(value, na.rm = TRUE),.groups = "drop") %>%
+  filter(count >= 2)  # Select gene pairs that appear in at least two matrices
+saveRDS(Endothelial_tumor_Liver_pair_counts,file="Pro_CoExpression/output/data/3CA/Liver/common_genesets/Endothelial/Endothelial_tumor_Liver_pair_counts.rds")
+library(ggplot2)
+ggplot(Endothelial_tumor_Liver_pair_counts, aes(y = median_value)) + 
+  geom_boxplot(outlier.colour = "red", outlier.shape = 16, outlier.size = 1) +
+  theme_minimal()
+stats               <- boxplot.stats(Endothelial_tumor_Liver_pair_counts$median_value)
+outlier             <- stats$out
+
+Q1                    <- quantile(Endothelial_tumor_Liver_pair_counts$median_value, 0.25)
+Q3                    <- quantile(Endothelial_tumor_Liver_pair_counts$median_value, 0.75)
+IQR                   <- Q3 - Q1
+threshold_1           <- Q3 + 1.5 * IQR #0
+threshold_2           <- Q1 - 1.5*IQR  #0
+Endothelial_tumor_Liver_reliable_coexp  <- Endothelial_tumor_Liver_pair_counts[Endothelial_tumor_Liver_pair_counts$median_value > threshold_1 |
+                                                                                 Endothelial_tumor_Liver_pair_counts$median_value < threshold_2, ]
+#128764
+Endothelial_tumor_Liver_reliable_coexp_df    <- Endothelial_tumor_Liver_reliable_coexp
+save(Endothelial_tumor_Liver_reliable_coexp_df,file = "Pro_CoExpression/output/data/3CA/Liver/common_genesets/Endothelial/Endothelial_tumor_Liver_reliable_coexp_df.RData")
+
+
+####Convert data frame into matrixs
+library(data.table)
+genes                                         <- unique(c(Endothelial_tumor_Liver_reliable_coexp_df$gene1, Endothelial_tumor_Liver_reliable_coexp_df$gene2))
+corr_matrix                                   <- matrix(NA, nrow = length(genes), ncol = length(genes), dimnames = list(genes, genes))
+Endothelial_tumor_Liver_reliable_coexp_df_dt                     <- as.data.table(Endothelial_tumor_Liver_reliable_coexp_df)
+#Create an index mapping
+gene_index                                    <- setNames(seq_along(genes), genes)
+#Fill the correlation matrix with vectorization operation
+row_indices                                   <- gene_index[Endothelial_tumor_Liver_reliable_coexp_df_dt$gene1]
+col_indices                                   <- gene_index[Endothelial_tumor_Liver_reliable_coexp_df_dt$gene2]
+corr_matrix[cbind(row_indices, col_indices)]  <- Endothelial_tumor_Liver_reliable_coexp_df_dt$median_value
+corr_matrix[cbind(col_indices, row_indices)]  <- Endothelial_tumor_Liver_reliable_coexp_df_dt$median_value
+Endothelial_tumor_Liver_pair_corr_matrix                   <- corr_matrix
+Endothelial_tumor_Liver_pair_corr_matrix[is.na(Endothelial_tumor_Liver_pair_corr_matrix)] <- 0
+Endothelial_tumor_Liver_reliable_coexp_mat  <- Endothelial_tumor_Liver_pair_corr_matrix
+saveRDS(Endothelial_tumor_Liver_reliable_coexp_mat,file="Pro_CoExpression/output/data/3CA/Liver/common_genesets/Endothelial/Endothelial_tumor_Liver_reliable_coexp_mat.rds")
+
+####*Macrophage####
+#select co-expressed gene pairs
+dataset_list                       <- list("Ma2019","Sharma2020","Zhang2019","Zhang2017")
+process_data_for_files             <- function(dataset_list) {
+  Macrophage_matrix_list                      <- list()
+  for ( dataset_id in dataset_list) {
+    tryCatch({
+      cor_file_path                        <- paste0("~/Pro_CoExpression/output/data/3CA/Liver/",dataset_id,"_Liver/",dataset_id,"_tumor_CSCORE_cor.rds")
+      padj_file_path                       <- paste0("~/Pro_CoExpression/output/data/3CA/Liver/",dataset_id,"_Liver/",dataset_id,"_tumor_CSCORE_padj.rds")
+      Macrophage_cor                         <- readRDS(cor_file_path)$Macrophage
+      Macrophage_padj                        <- readRDS(padj_file_path)$Macrophage
+      Macrophage_cor[Macrophage_padj > 0.05]      <- 0
+      Macrophage_matrix_list                           <- append(Macrophage_matrix_list,(list(Macrophage_cor)))
+    },error=function(e){message(paste("Error processing dataset", dataset_id, ": ", e$message))
+    })
+  }
+  return(Macrophage_matrix_list)
+}
+Macrophage_matrix_list         <- process_data_for_files(dataset_list)
+Macrophage_matrix_list         <- Macrophage_matrix_list[-c(1,3)]
+names(Macrophage_matrix_list)  <- unlist(dataset_list[3])
+####Ma2019
+Ma2019_Macrophage_tumor_cor    <- readRDS("Pro_CoExpression/output/data/3CA/Liver/Ma2019_Liver/Ma2019_CSCORE_cor.rds")$Macrophage
+Ma2019_Macrophage_tumor_padj   <- readRDS("Pro_CoExpression/output/data/3CA/Liver/Ma2019_Liver/Ma2019_CSCORE_padj.rds")$Macrophage
+Ma2019_Macrophage_tumor_cor[Ma2019_Macrophage_tumor_padj>0.05] <- 0
+Macrophage_matrix_list            <- append(Macrophage_matrix_list,list(Ma2019_Macrophage_tumor_cor))
+names(Macrophage_matrix_list)[2]  <- "Ma2019"
+
+####merge the resluts of all datasets
+library(dplyr)
+library(tidyr)
+all_pairs         <- data.frame(row = character(), col = character(), value = numeric(), stringsAsFactors = FALSE)
+for (mat in Macrophage_matrix_list) {
+  mat[lower.tri(mat)] <- NA
+  temp_data       <- as.data.frame(which(!is.na(mat), arr.ind = TRUE))
+  temp_data$value <- mat[!is.na(mat)]
+  temp_data$gene1 <- rownames(mat)[temp_data$row]
+  temp_data$gene2 <- colnames(mat)[temp_data$col]
+  all_pairs       <- rbind(all_pairs, temp_data)
+}
+
+#### Count the frequency of occurrence of each gene pair
+Macrophage_tumor_Liver_pair_counts <- all_pairs %>%
+  group_by(gene1, gene2) %>%
+  summarise(count = n(), median_value = median(value, na.rm = TRUE),.groups = "drop") %>%
+  filter(count >= 2)  # Select gene pairs that appear in at least two matrices
+saveRDS(Macrophage_tumor_Liver_pair_counts,file="Pro_CoExpression/output/data/3CA/Liver/common_genesets/Macrophage/Macrophage_tumor_Liver_pair_counts.rds")
+library(ggplot2)
+ggplot(Macrophage_tumor_Liver_pair_counts, aes(y = median_value)) + 
+  geom_boxplot(outlier.colour = "red", outlier.shape = 16, outlier.size = 1) +
+  theme_minimal()
+stats               <- boxplot.stats(Macrophage_tumor_Liver_pair_counts$median_value)
+outlier             <- stats$out
+
+Q1                    <- quantile(Macrophage_tumor_Liver_pair_counts$median_value, 0.25)
+Q3                    <- quantile(Macrophage_tumor_Liver_pair_counts$median_value, 0.75)
+IQR                   <- Q3 - Q1
+threshold_1           <- Q3 + 1.5 * IQR #0
+threshold_2           <- Q1 - 1.5*IQR  #0
+Macrophage_tumor_Liver_reliable_coexp  <- Macrophage_tumor_Liver_pair_counts[Macrophage_tumor_Liver_pair_counts$median_value > threshold_1 |
+                                                                               Macrophage_tumor_Liver_pair_counts$median_value < threshold_2, ]
+#21233
+Macrophage_tumor_Liver_reliable_coexp_df    <- Macrophage_tumor_Liver_reliable_coexp
+save(Macrophage_tumor_Liver_reliable_coexp_df,file = "Pro_CoExpression/output/data/3CA/Liver/common_genesets/Macrophage/Macrophage_tumor_Liver_reliable_coexp_df.RData")
+
+
+####Convert data frame into matrixs
+library(data.table)
+genes                                         <- unique(c(Macrophage_tumor_Liver_reliable_coexp_df$gene1, Macrophage_tumor_Liver_reliable_coexp_df$gene2))
+corr_matrix                                   <- matrix(NA, nrow = length(genes), ncol = length(genes), dimnames = list(genes, genes))
+Macrophage_tumor_Liver_reliable_coexp_df_dt                     <- as.data.table(Macrophage_tumor_Liver_reliable_coexp_df)
+#Create an index mapping
+gene_index                                    <- setNames(seq_along(genes), genes)
+#Fill the correlation matrix with vectorization operation
+row_indices                                   <- gene_index[Macrophage_tumor_Liver_reliable_coexp_df_dt$gene1]
+col_indices                                   <- gene_index[Macrophage_tumor_Liver_reliable_coexp_df_dt$gene2]
+corr_matrix[cbind(row_indices, col_indices)]  <- Macrophage_tumor_Liver_reliable_coexp_df_dt$median_value
+corr_matrix[cbind(col_indices, row_indices)]  <- Macrophage_tumor_Liver_reliable_coexp_df_dt$median_value
+Macrophage_tumor_Liver_pair_corr_matrix                   <- corr_matrix
+Macrophage_tumor_Liver_pair_corr_matrix[is.na(Macrophage_tumor_Liver_pair_corr_matrix)] <- 0
+Macrophage_tumor_Liver_reliable_coexp_mat  <- Macrophage_tumor_Liver_pair_corr_matrix
+saveRDS(Macrophage_tumor_Liver_reliable_coexp_mat,file="Pro_CoExpression/output/data/3CA/Liver/common_genesets/Macrophage/Macrophage_tumor_Liver_reliable_coexp_mat.rds")
+
+####*Hepatocyte####
+#select co-expressed gene pairs
+dataset_list                       <- list("Ma2019","Sharma2020","Zhang2019","Zhang2017")
+process_data_for_files             <- function(dataset_list) {
+  Hepatocyte_matrix_list                      <- list()
+  for ( dataset_id in dataset_list) {
+    tryCatch({
+      cor_file_path                        <- paste0("~/Pro_CoExpression/output/data/3CA/Liver/",dataset_id,"_Liver/",dataset_id,"_tumor_CSCORE_cor.rds")
+      padj_file_path                       <- paste0("~/Pro_CoExpression/output/data/3CA/Liver/",dataset_id,"_Liver/",dataset_id,"_tumor_CSCORE_padj.rds")
+      Hepatocyte_cor                         <- readRDS(cor_file_path)$Hepatocyte
+      Hepatocyte_padj                        <- readRDS(padj_file_path)$Hepatocyte
+      Hepatocyte_cor[Hepatocyte_padj > 0.05]      <- 0
+      Hepatocyte_matrix_list                           <- append(Hepatocyte_matrix_list,(list(Hepatocyte_cor)))
+    },error=function(e){message(paste("Error processing dataset", dataset_id, ": ", e$message))
+    })
+  }
+  return(Hepatocyte_matrix_list)
+}
+Hepatocyte_matrix_list         <- process_data_for_files(dataset_list)
+Hepatocyte_matrix_list         <- Hepatocyte_matrix_list[1]
+names(Hepatocyte_matrix_list)  <- unlist(dataset_list[2])
+####Ma2019
+Ma2019_Malignant_tumor_cor    <- readRDS("Pro_CoExpression/output/data/3CA/Liver/Ma2019_Liver/Ma2019_CSCORE_cor.rds")$Malignant
+Ma2019_Malignant_tumor_padj   <- readRDS("Pro_CoExpression/output/data/3CA/Liver/Ma2019_Liver/Ma2019_CSCORE_padj.rds")$Malignant
+Ma2019_Malignant_tumor_cor[Ma2019_Malignant_tumor_padj>0.05] <- 0
+Hepatocyte_matrix_list            <- append(Hepatocyte_matrix_list,list(Ma2019_Malignant_tumor_cor))
+names(Hepatocyte_matrix_list)[2]  <- "Ma2019"
+
+####merge the resluts of all datasets
+library(dplyr)
+library(tidyr)
+all_pairs         <- data.frame(row = character(), col = character(), value = numeric(), stringsAsFactors = FALSE)
+for (mat in Hepatocyte_matrix_list) {
+  mat[lower.tri(mat)] <- NA
+  temp_data       <- as.data.frame(which(!is.na(mat), arr.ind = TRUE))
+  temp_data$value <- mat[!is.na(mat)]
+  temp_data$gene1 <- rownames(mat)[temp_data$row]
+  temp_data$gene2 <- colnames(mat)[temp_data$col]
+  all_pairs       <- rbind(all_pairs, temp_data)
+}
+
+#### Count the frequency of occurrence of each gene pair
+Hepatocyte_tumor_Liver_pair_counts <- all_pairs %>%
+  group_by(gene1, gene2) %>%
+  summarise(count = n(), median_value = median(value, na.rm = TRUE),.groups = "drop") %>%
+  filter(count >= 2)  # Select gene pairs that appear in at least two matrices
+saveRDS(Hepatocyte_tumor_Liver_pair_counts,file="Pro_CoExpression/output/data/3CA/Liver/common_genesets/Hepatocyte/Hepatocyte_tumor_Liver_pair_counts.rds")
+library(ggplot2)
+ggplot(Hepatocyte_tumor_Liver_pair_counts, aes(y = median_value)) + 
+  geom_boxplot(outlier.colour = "red", outlier.shape = 16, outlier.size = 1) +
+  theme_minimal()
+stats               <- boxplot.stats(Hepatocyte_tumor_Liver_pair_counts$median_value)
+outlier             <- stats$out
+
+Q1                    <- quantile(Hepatocyte_tumor_Liver_pair_counts$median_value, 0.25)
+Q3                    <- quantile(Hepatocyte_tumor_Liver_pair_counts$median_value, 0.75)
+IQR                   <- Q3 - Q1
+threshold_1           <- Q3 + 1.5 * IQR #0.692
+threshold_2           <- Q1 - 1.5*IQR  #-0.546
+Hepatocyte_tumor_Liver_reliable_coexp  <- Hepatocyte_tumor_Liver_pair_counts[Hepatocyte_tumor_Liver_pair_counts$median_value > threshold_1 |
+                                                                               Hepatocyte_tumor_Liver_pair_counts$median_value < threshold_2, ]
+#6331
+Hepatocyte_tumor_Liver_reliable_coexp_df    <- Hepatocyte_tumor_Liver_reliable_coexp
+save(Hepatocyte_tumor_Liver_reliable_coexp_df,file = "Pro_CoExpression/output/data/3CA/Liver/common_genesets/Hepatocyte/Hepatocyte_tumor_Liver_reliable_coexp_df.RData")
+
+
+####Convert data frame into matrixs
+library(data.table)
+genes                                         <- unique(c(Hepatocyte_tumor_Liver_reliable_coexp_df$gene1, Hepatocyte_tumor_Liver_reliable_coexp_df$gene2))
+corr_matrix                                   <- matrix(NA, nrow = length(genes), ncol = length(genes), dimnames = list(genes, genes))
+Hepatocyte_tumor_Liver_reliable_coexp_df_dt                     <- as.data.table(Hepatocyte_tumor_Liver_reliable_coexp_df)
+#Create an index mapping
+gene_index                                    <- setNames(seq_along(genes), genes)
+#Fill the correlation matrix with vectorization operation
+row_indices                                   <- gene_index[Hepatocyte_tumor_Liver_reliable_coexp_df_dt$gene1]
+col_indices                                   <- gene_index[Hepatocyte_tumor_Liver_reliable_coexp_df_dt$gene2]
+corr_matrix[cbind(row_indices, col_indices)]  <- Hepatocyte_tumor_Liver_reliable_coexp_df_dt$median_value
+corr_matrix[cbind(col_indices, row_indices)]  <- Hepatocyte_tumor_Liver_reliable_coexp_df_dt$median_value
+Hepatocyte_tumor_Liver_pair_corr_matrix                   <- corr_matrix
+Hepatocyte_tumor_Liver_pair_corr_matrix[is.na(Hepatocyte_tumor_Liver_pair_corr_matrix)] <- 0
+Hepatocyte_tumor_Liver_reliable_coexp_mat  <- Hepatocyte_tumor_Liver_pair_corr_matrix
+saveRDS(Hepatocyte_tumor_Liver_reliable_coexp_mat,file="Pro_CoExpression/output/data/3CA/Liver/common_genesets/Hepatocyte/Hepatocyte_tumor_Liver_reliable_coexp_mat.rds")
+
+####Normal tissue####
+####*T_cell####
+#select co-expressed gene pairs
+dataset_list                       <- list("Sharma2020","Zhang2019","Zhang2017")
+process_data_for_files             <- function(dataset_list) {
+  Tcell_matrix_list                      <- list()
+  for ( dataset_id in dataset_list) {
+    tryCatch({
+      cor_file_path                        <- paste0("~/Pro_CoExpression/output/data/3CA/Liver/",dataset_id,"_Liver/",dataset_id,"_normal_CSCORE_cor.rds")
+      padj_file_path                       <- paste0("~/Pro_CoExpression/output/data/3CA/Liver/",dataset_id,"_Liver/",dataset_id,"_normal_CSCORE_padj.rds")
+      Tcell_cor                         <- readRDS(cor_file_path)$T_cell
+      Tcell_padj                        <- readRDS(padj_file_path)$T_cell
+      Tcell_cor[Tcell_padj > 0.05]      <- 0
+      Tcell_matrix_list                           <- append(Tcell_matrix_list,(list(Tcell_cor)))
+    },error=function(e){message(paste("Error processing dataset", dataset_id, ": ", e$message))
+    })
+  }
+  return(Tcell_matrix_list)
+}
+Tcell_matrix_list         <- process_data_for_files(dataset_list)
+names(Tcell_matrix_list)  <- unlist(dataset_list)
+
+####merge the resluts of all datasets
+library(dplyr)
+library(tidyr)
+all_pairs         <- data.frame(row = character(), col = character(), value = numeric(), stringsAsFactors = FALSE)
+for (mat in Tcell_matrix_list) {
+  mat[lower.tri(mat)] <- NA
+  temp_data       <- as.data.frame(which(!is.na(mat), arr.ind = TRUE))
+  temp_data$value <- mat[!is.na(mat)]
+  temp_data$gene1 <- rownames(mat)[temp_data$row]
+  temp_data$gene2 <- colnames(mat)[temp_data$col]
+  all_pairs       <- rbind(all_pairs, temp_data)
+}
+
+#### Count the frequency of occurrence of each gene pair
+Tcell_normal_Liver_pair_counts <- all_pairs %>%
+  group_by(gene1, gene2) %>%
+  summarise(count = n(), median_value = median(value, na.rm = TRUE),.groups = "drop") %>%
+  filter(count >= 2)  # Select gene pairs that appear in at least two matrices
+saveRDS(Tcell_normal_Liver_pair_counts,file="Pro_CoExpression/output/data/3CA/Liver/common_genesets/T_cell/Tcell_normal_Liver_pair_counts.rds")
+library(ggplot2)
+ggplot(Tcell_normal_Liver_pair_counts, aes(y = median_value)) + 
+  geom_boxplot(outlier.colour = "red", outlier.shape = 16, outlier.size = 1) +
+  theme_minimal()
+stats               <- boxplot.stats(Tcell_normal_Liver_pair_counts$median_value)
+outlier             <- stats$out
+
+Q1                    <- quantile(Tcell_normal_Liver_pair_counts$median_value, 0.25)
+Q3                    <- quantile(Tcell_normal_Liver_pair_counts$median_value, 0.75)
+IQR                   <- Q3 - Q1
+threshold_1           <- Q3 + 1.5 * IQR #0
+threshold_2           <- Q1 - 1.5*IQR  #0
+Tcell_normal_Liver_reliable_coexp  <- Tcell_normal_Liver_pair_counts[Tcell_normal_Liver_pair_counts$median_value > threshold_1 |
+                                                                       Tcell_normal_Liver_pair_counts$median_value < threshold_2, ]
+#134574
+Tcell_normal_Liver_reliable_coexp_df    <- Tcell_normal_Liver_reliable_coexp
+save(Tcell_normal_Liver_reliable_coexp_df,file = "Pro_CoExpression/output/data/3CA/Liver/common_genesets/T_cell/Tcell_normal_Liver_reliable_coexp_df.RData")
+
+
+####Convert data frame into matrixs
+library(data.table)
+genes                                         <- unique(c(Tcell_normal_Liver_reliable_coexp_df$gene1, Tcell_normal_Liver_reliable_coexp_df$gene2))
+corr_matrix                                   <- matrix(NA, nrow = length(genes), ncol = length(genes), dimnames = list(genes, genes))
+Tcell_normal_Liver_reliable_coexp_df_dt                     <- as.data.table(Tcell_normal_Liver_reliable_coexp_df)
+#Create an index mapping
+gene_index                                    <- setNames(seq_along(genes), genes)
+#Fill the correlation matrix with vectorization operation
+row_indices                                   <- gene_index[Tcell_normal_Liver_reliable_coexp_df_dt$gene1]
+col_indices                                   <- gene_index[Tcell_normal_Liver_reliable_coexp_df_dt$gene2]
+corr_matrix[cbind(row_indices, col_indices)]  <- Tcell_normal_Liver_reliable_coexp_df_dt$median_value
+corr_matrix[cbind(col_indices, row_indices)]  <- Tcell_normal_Liver_reliable_coexp_df_dt$median_value
+Tcell_normal_Liver_pair_corr_matrix                   <- corr_matrix
+Tcell_normal_Liver_pair_corr_matrix[is.na(Tcell_normal_Liver_pair_corr_matrix)] <- 0
+Tcell_normal_Liver_reliable_coexp_mat  <- Tcell_normal_Liver_pair_corr_matrix
+saveRDS(Tcell_normal_Liver_reliable_coexp_mat,file="Pro_CoExpression/output/data/3CA/Liver/common_genesets/T_cell/Tcell_normal_Liver_reliable_coexp_mat.rds")
+
+####*B_cell####
+#select co-expressed gene pairs
+dataset_list                       <- list("Sharma2020","Zhang2019","Zhang2017")
+process_data_for_files             <- function(dataset_list) {
+  Bcell_matrix_list                      <- list()
+  for ( dataset_id in dataset_list) {
+    tryCatch({
+      cor_file_path                        <- paste0("~/Pro_CoExpression/output/data/3CA/Liver/",dataset_id,"_Liver/",dataset_id,"_normal_CSCORE_cor.rds")
+      padj_file_path                       <- paste0("~/Pro_CoExpression/output/data/3CA/Liver/",dataset_id,"_Liver/",dataset_id,"_normal_CSCORE_padj.rds")
+      Bcell_cor                         <- readRDS(cor_file_path)$B_cell
+      Bcell_padj                        <- readRDS(padj_file_path)$B_cell
+      Bcell_cor[Bcell_padj > 0.05]      <- 0
+      Bcell_matrix_list                           <- append(Bcell_matrix_list,(list(Bcell_cor)))
+    },error=function(e){message(paste("Error processing dataset", dataset_id, ": ", e$message))
+    })
+  }
+  return(Bcell_matrix_list)
+}
+Bcell_matrix_list         <- process_data_for_files(dataset_list)
+Bcell_matrix_list         <- Bcell_matrix_list[-3]
+names(Bcell_matrix_list)  <- unlist(dataset_list[-3])
+
+####merge the resluts of all datasets
+library(dplyr)
+library(tidyr)
+all_pairs         <- data.frame(row = character(), col = character(), value = numeric(), stringsAsFactors = FALSE)
+for (mat in Bcell_matrix_list) {
+  mat[lower.tri(mat)] <- NA
+  temp_data       <- as.data.frame(which(!is.na(mat), arr.ind = TRUE))
+  temp_data$value <- mat[!is.na(mat)]
+  temp_data$gene1 <- rownames(mat)[temp_data$row]
+  temp_data$gene2 <- colnames(mat)[temp_data$col]
+  all_pairs       <- rbind(all_pairs, temp_data)
+}
+
+#### Count the frequency of occurrence of each gene pair
+Bcell_normal_Liver_pair_counts <- all_pairs %>%
+  group_by(gene1, gene2) %>%
+  summarise(count = n(), median_value = median(value, na.rm = TRUE),.groups = "drop") %>%
+  filter(count >= 2)  # Select gene pairs that appear in at least two matrices
+saveRDS(Bcell_normal_Liver_pair_counts,file="Pro_CoExpression/output/data/3CA/Liver/common_genesets/B_cell/Bcell_normal_Liver_pair_counts.rds")
+library(ggplot2)
+ggplot(Bcell_normal_Liver_pair_counts, aes(y = median_value)) + 
+  geom_boxplot(outlier.colour = "red", outlier.shape = 16, outlier.size = 1) +
+  theme_minimal()
+stats               <- boxplot.stats(Bcell_normal_Liver_pair_counts$median_value)
+outlier             <- stats$out
+
+Q1                    <- quantile(Bcell_normal_Liver_pair_counts$median_value, 0.25)
+Q3                    <- quantile(Bcell_normal_Liver_pair_counts$median_value, 0.75)
+IQR                   <- Q3 - Q1
+threshold_1           <- Q3 + 1.5 * IQR #0.598
+threshold_2           <- Q1 - 1.5*IQR  #-0.359
+Bcell_normal_Liver_reliable_coexp  <- Bcell_normal_Liver_pair_counts[Bcell_normal_Liver_pair_counts$median_value > threshold_1 |
+                                                                       Bcell_normal_Liver_pair_counts$median_value < threshold_2, ]
+#3025
+Bcell_normal_Liver_reliable_coexp_df    <- Bcell_normal_Liver_reliable_coexp
+save(Bcell_normal_Liver_reliable_coexp_df,file = "Pro_CoExpression/output/data/3CA/Liver/common_genesets/B_cell/Bcell_normal_Liver_reliable_coexp_df.RData")
+
+
+####Convert data frame into matrixs
+library(data.table)
+genes                                         <- unique(c(Bcell_normal_Liver_reliable_coexp_df$gene1, Bcell_normal_Liver_reliable_coexp_df$gene2))
+corr_matrix                                   <- matrix(NA, nrow = length(genes), ncol = length(genes), dimnames = list(genes, genes))
+Bcell_normal_Liver_reliable_coexp_df_dt                     <- as.data.table(Bcell_normal_Liver_reliable_coexp_df)
+#Create an index mapping
+gene_index                                    <- setNames(seq_along(genes), genes)
+#Fill the correlation matrix with vectorization operation
+row_indices                                   <- gene_index[Bcell_normal_Liver_reliable_coexp_df_dt$gene1]
+col_indices                                   <- gene_index[Bcell_normal_Liver_reliable_coexp_df_dt$gene2]
+corr_matrix[cbind(row_indices, col_indices)]  <- Bcell_normal_Liver_reliable_coexp_df_dt$median_value
+corr_matrix[cbind(col_indices, row_indices)]  <- Bcell_normal_Liver_reliable_coexp_df_dt$median_value
+Bcell_normal_Liver_pair_corr_matrix                   <- corr_matrix
+Bcell_normal_Liver_pair_corr_matrix[is.na(Bcell_normal_Liver_pair_corr_matrix)] <- 0
+Bcell_normal_Liver_reliable_coexp_mat  <- Bcell_normal_Liver_pair_corr_matrix
+saveRDS(Bcell_normal_Liver_reliable_coexp_mat,file="Pro_CoExpression/output/data/3CA/Liver/common_genesets/B_cell/Bcell_normal_Liver_reliable_coexp_mat.rds")
+
+####*Fibroblast: only one dataset####
+#select co-expressed gene pairs
+dataset_list                       <- list("Sharma2020","Zhang2019","Zhang2017")
+process_data_for_files             <- function(dataset_list) {
+  Fibroblast_matrix_list                      <- list()
+  for ( dataset_id in dataset_list) {
+    tryCatch({
+      cor_file_path                        <- paste0("~/Pro_CoExpression/output/data/3CA/Liver/",dataset_id,"_Liver/",dataset_id,"_normal_CSCORE_cor.rds")
+      padj_file_path                       <- paste0("~/Pro_CoExpression/output/data/3CA/Liver/",dataset_id,"_Liver/",dataset_id,"_normal_CSCORE_padj.rds")
+      Fibroblast_cor                         <- readRDS(cor_file_path)$Fibroblast
+      Fibroblast_padj                        <- readRDS(padj_file_path)$Fibroblast
+      Fibroblast_cor[Fibroblast_padj > 0.05]      <- 0
+      Fibroblast_matrix_list                           <- append(Fibroblast_matrix_list,(list(Fibroblast_cor)))
+    },error=function(e){message(paste("Error processing dataset", dataset_id, ": ", e$message))
+    })
+  }
+  return(Fibroblast_matrix_list)
+}
+Fibroblast_matrix_list         <- process_data_for_files(dataset_list)
+Fibroblast_matrix_list         <- Fibroblast_matrix_list[1]
+names(Fibroblast_matrix_list)  <- unlist(dataset_list[1])
+
+####merge the resluts of all datasets
+library(dplyr)
+library(tidyr)
+all_pairs         <- data.frame(row = character(), col = character(), value = numeric(), stringsAsFactors = FALSE)
+for (mat in Fibroblast_matrix_list) {
+  mat[lower.tri(mat)]    <- NA
+  temp_data       <- as.data.frame(which(!is.na(mat), arr.ind = TRUE))
+  temp_data$value <- mat[!is.na(mat)]
+  temp_data$gene1 <- rownames(mat)[temp_data$row]
+  temp_data$gene2 <- colnames(mat)[temp_data$col]
+  all_pairs       <- rbind(all_pairs, temp_data)
+}
+
+#### Count the frequency of occurrence of each gene pair
+Fibroblast_normal_Liver_pair_counts <- all_pairs  # Select gene pairs that appear in at least two matrices
+saveRDS(Fibroblast_normal_Liver_pair_counts,file="Pro_CoExpression/output/data/3CA/Liver/common_genesets/Fibroblast/Fibroblast_normal_Liver_pair_counts.rds")
+stats                 <- boxplot.stats(Fibroblast_normal_Liver_pair_counts$value)
+outlier               <- stats$out
+
+Q1                    <- quantile(Fibroblast_normal_Liver_pair_counts$value, 0.25)
+Q3                    <- quantile(Fibroblast_normal_Liver_pair_counts$value, 0.75)
+IQR                   <- Q3 - Q1
+threshold_1           <- Q3 + 1.5 * IQR #0 
+threshold_2           <- Q1 - 1.5*IQR #0 
+Fibroblast_normal_reliable_coexp     <- Fibroblast_normal_Liver_pair_counts[abs(Fibroblast_normal_Liver_pair_counts$value) > threshold_1, ]
+Fibroblast_normal_liver_reliable_coexp_df  <- Fibroblast_normal_reliable_coexp
+#5869
+saveRDS(Fibroblast_normal_liver_reliable_coexp_df,file = "Pro_CoExpression/output/data/3CA/Liver/common_genesets/Fibroblast/Fibroblast_normal_liver_reliable_coexp_df.rds")
+
+
+####Convert data frame into matrixs
+Fibroblast_normal_liver_reliable_coexp_mat <- Fibroblast_matrix_list$Sharma2020
+saveRDS(Fibroblast_normal_liver_reliable_coexp_mat,file="Pro_CoExpression/output/data/3CA/Liver/common_genesets/Fibroblast/Fibroblast_normal_liver_reliable_coexp_mat.rds")
+
+####*Endothelial: only one dataset####
+#select co-expressed gene pairs
+dataset_list                       <- list("Sharma2020","Zhang2019","Zhang2017")
+process_data_for_files             <- function(dataset_list) {
+  Endothelial_matrix_list                      <- list()
+  for ( dataset_id in dataset_list) {
+    tryCatch({
+      cor_file_path                        <- paste0("~/Pro_CoExpression/output/data/3CA/Liver/",dataset_id,"_Liver/",dataset_id,"_normal_CSCORE_cor.rds")
+      padj_file_path                       <- paste0("~/Pro_CoExpression/output/data/3CA/Liver/",dataset_id,"_Liver/",dataset_id,"_normal_CSCORE_padj.rds")
+      Endothelial_cor                         <- readRDS(cor_file_path)$Endothelial
+      Endothelial_padj                        <- readRDS(padj_file_path)$Endothelial
+      Endothelial_cor[Endothelial_padj > 0.05]      <- 0
+      Endothelial_matrix_list                           <- append(Endothelial_matrix_list,(list(Endothelial_cor)))
+    },error=function(e){message(paste("Error processing dataset", dataset_id, ": ", e$message))
+    })
+  }
+  return(Endothelial_matrix_list)
+}
+Endothelial_matrix_list         <- process_data_for_files(dataset_list)
+Endothelial_matrix_list         <- Endothelial_matrix_list[1]
+names(Endothelial_matrix_list)  <- unlist(dataset_list[1])
+
+####merge the resluts of all datasets
+library(dplyr)
+library(tidyr)
+all_pairs         <- data.frame(row = character(), col = character(), value = numeric(), stringsAsFactors = FALSE)
+for (mat in Endothelial_matrix_list) {
+  mat[lower.tri(mat)]    <- NA
+  temp_data       <- as.data.frame(which(!is.na(mat), arr.ind = TRUE))
+  temp_data$value <- mat[!is.na(mat)]
+  temp_data$gene1 <- rownames(mat)[temp_data$row]
+  temp_data$gene2 <- colnames(mat)[temp_data$col]
+  all_pairs       <- rbind(all_pairs, temp_data)
+}
+
+#### Count the frequency of occurrence of each gene pair
+Endothelial_normal_Liver_pair_counts <- all_pairs  # Select gene pairs that appear in at least two matrices
+saveRDS(Endothelial_normal_Liver_pair_counts,file="Pro_CoExpression/output/data/3CA/Liver/common_genesets/Endothelial/Endothelial_normal_Liver_pair_counts.rds")
+stats                 <- boxplot.stats(Endothelial_normal_Liver_pair_counts$value)
+outlier               <- stats$out
+
+Q1                    <- quantile(Endothelial_normal_Liver_pair_counts$value, 0.25)
+Q3                    <- quantile(Endothelial_normal_Liver_pair_counts$value, 0.75)
+IQR                   <- Q3 - Q1
+threshold_1           <- Q3 + 1.5 * IQR #0 
+threshold_2           <- Q1 - 1.5*IQR #0 
+Endothelial_normal_reliable_coexp     <- Endothelial_normal_Liver_pair_counts[abs(Endothelial_normal_Liver_pair_counts$value) > threshold_1, ]
+Endothelial_normal_liver_reliable_coexp_df  <- Endothelial_normal_reliable_coexp
+#104279
+saveRDS(Endothelial_normal_liver_reliable_coexp_df,file = "Pro_CoExpression/output/data/3CA/Liver/common_genesets/Endothelial/Endothelial_normal_liver_reliable_coexp_df.rds")
+
+
+####Convert data frame into matrixs
+Endothelial_normal_liver_reliable_coexp_mat <- Endothelial_matrix_list$Sharma2020
+saveRDS(Endothelial_normal_liver_reliable_coexp_mat,file="Pro_CoExpression/output/data/3CA/Liver/common_genesets/Endothelial/Endothelial_normal_liver_reliable_coexp_mat.rds")
+
+####*Hepatocyte: only one dataset####
+#select co-expressed gene pairs
+dataset_list                       <- list("Sharma2020","Zhang2019","Zhang2017")
+process_data_for_files             <- function(dataset_list) {
+  Hepatocyte_matrix_list                      <- list()
+  for ( dataset_id in dataset_list) {
+    tryCatch({
+      cor_file_path                        <- paste0("~/Pro_CoExpression/output/data/3CA/Liver/",dataset_id,"_Liver/",dataset_id,"_normal_CSCORE_cor.rds")
+      padj_file_path                       <- paste0("~/Pro_CoExpression/output/data/3CA/Liver/",dataset_id,"_Liver/",dataset_id,"_normal_CSCORE_padj.rds")
+      Hepatocyte_cor                         <- readRDS(cor_file_path)$Hepatocyte
+      Hepatocyte_padj                        <- readRDS(padj_file_path)$Hepatocyte
+      Hepatocyte_cor[Hepatocyte_padj > 0.05]      <- 0
+      Hepatocyte_matrix_list                           <- append(Hepatocyte_matrix_list,(list(Hepatocyte_cor)))
+    },error=function(e){message(paste("Error processing dataset", dataset_id, ": ", e$message))
+    })
+  }
+  return(Hepatocyte_matrix_list)
+}
+Hepatocyte_matrix_list         <- process_data_for_files(dataset_list)
+Hepatocyte_matrix_list         <- Hepatocyte_matrix_list[1]
+names(Hepatocyte_matrix_list)  <- unlist(dataset_list[1])
+
+####merge the resluts of all datasets
+library(dplyr)
+library(tidyr)
+all_pairs         <- data.frame(row = character(), col = character(), value = numeric(), stringsAsFactors = FALSE)
+for (mat in Hepatocyte_matrix_list) {
+  mat[lower.tri(mat)]    <- NA
+  temp_data       <- as.data.frame(which(!is.na(mat), arr.ind = TRUE))
+  temp_data$value <- mat[!is.na(mat)]
+  temp_data$gene1 <- rownames(mat)[temp_data$row]
+  temp_data$gene2 <- colnames(mat)[temp_data$col]
+  all_pairs       <- rbind(all_pairs, temp_data)
+}
+
+#### Count the frequency of occurrence of each gene pair
+Hepatocyte_normal_Liver_pair_counts <- all_pairs  # Select gene pairs that appear in at least two matrices
+saveRDS(Hepatocyte_normal_Liver_pair_counts,file="Pro_CoExpression/output/data/3CA/Liver/common_genesets/Hepatocyte/Hepatocyte_normal_Liver_pair_counts.rds")
+stats                 <- boxplot.stats(Hepatocyte_normal_Liver_pair_counts$value)
+outlier               <- stats$out
+
+Q1                    <- quantile(Hepatocyte_normal_Liver_pair_counts$value, 0.25)
+Q3                    <- quantile(Hepatocyte_normal_Liver_pair_counts$value, 0.75)
+IQR                   <- Q3 - Q1
+threshold_1           <- Q3 + 1.5 * IQR #0 
+threshold_2           <- Q1 - 1.5*IQR #0 
+Hepatocyte_normal_reliable_coexp     <- Hepatocyte_normal_Liver_pair_counts[abs(Hepatocyte_normal_Liver_pair_counts$value) > threshold_1, ]
+Hepatocyte_normal_liver_reliable_coexp_df  <- Hepatocyte_normal_reliable_coexp
+#2094
+saveRDS(Hepatocyte_normal_liver_reliable_coexp_df,file = "Pro_CoExpression/output/data/3CA/Liver/common_genesets/Hepatocyte/Hepatocyte_normal_liver_reliable_coexp_df.rds")
+
+
+####Convert data frame into matrixs
+Hepatocyte_normal_liver_reliable_coexp_mat <- Hepatocyte_matrix_list$Sharma2020
+saveRDS(Hepatocyte_normal_liver_reliable_coexp_mat,file="Pro_CoExpression/output/data/3CA/Liver/common_genesets/Hepatocyte/Hepatocyte_normal_liver_reliable_coexp_mat.rds")
+
+####*Macrophage: only one dataset####
+#select co-expressed gene pairs
+dataset_list                       <- list("Sharma2020","Zhang2019","Zhang2017")
+process_data_for_files             <- function(dataset_list) {
+  Macrophage_matrix_list                      <- list()
+  for ( dataset_id in dataset_list) {
+    tryCatch({
+      cor_file_path                        <- paste0("~/Pro_CoExpression/output/data/3CA/Liver/",dataset_id,"_Liver/",dataset_id,"_normal_CSCORE_cor.rds")
+      padj_file_path                       <- paste0("~/Pro_CoExpression/output/data/3CA/Liver/",dataset_id,"_Liver/",dataset_id,"_normal_CSCORE_padj.rds")
+      Macrophage_cor                         <- readRDS(cor_file_path)$Macrophage
+      Macrophage_padj                        <- readRDS(padj_file_path)$Macrophage
+      Macrophage_cor[Macrophage_padj > 0.05]      <- 0
+      Macrophage_matrix_list                           <- append(Macrophage_matrix_list,(list(Macrophage_cor)))
+    },error=function(e){message(paste("Error processing dataset", dataset_id, ": ", e$message))
+    })
+  }
+  return(Macrophage_matrix_list)
+}
+Macrophage_matrix_list         <- process_data_for_files(dataset_list)
+Macrophage_matrix_list         <- Macrophage_matrix_list[2]
+names(Macrophage_matrix_list)  <- unlist(dataset_list[2])
+
+####merge the resluts of all datasets
+library(dplyr)
+library(tidyr)
+all_pairs         <- data.frame(row = character(), col = character(), value = numeric(), stringsAsFactors = FALSE)
+for (mat in Macrophage_matrix_list) {
+  mat[lower.tri(mat)]    <- NA
+  temp_data       <- as.data.frame(which(!is.na(mat), arr.ind = TRUE))
+  temp_data$value <- mat[!is.na(mat)]
+  temp_data$gene1 <- rownames(mat)[temp_data$row]
+  temp_data$gene2 <- colnames(mat)[temp_data$col]
+  all_pairs       <- rbind(all_pairs, temp_data)
+}
+
+#### Count the frequency of occurrence of each gene pair
+Macrophage_normal_Liver_pair_counts <- all_pairs  # Select gene pairs that appear in at least two matrices
+saveRDS(Macrophage_normal_Liver_pair_counts,file="Pro_CoExpression/output/data/3CA/Liver/common_genesets/Macrophage/Macrophage_normal_Liver_pair_counts.rds")
+stats                 <- boxplot.stats(Macrophage_normal_Liver_pair_counts$value)
+outlier               <- stats$out
+
+Q1                    <- quantile(Macrophage_normal_Liver_pair_counts$value, 0.25)
+Q3                    <- quantile(Macrophage_normal_Liver_pair_counts$value, 0.75)
+IQR                   <- Q3 - Q1
+threshold_1           <- Q3 + 1.5 * IQR #0 
+threshold_2           <- Q1 - 1.5*IQR #0 
+Macrophage_normal_reliable_coexp     <- Macrophage_normal_Liver_pair_counts[abs(Macrophage_normal_Liver_pair_counts$value) > threshold_1, ]
+Macrophage_normal_liver_reliable_coexp_df  <- Macrophage_normal_reliable_coexp
+#8220
+saveRDS(Macrophage_normal_liver_reliable_coexp_df,file = "Pro_CoExpression/output/data/3CA/Liver/common_genesets/Macrophage/Macrophage_normal_liver_reliable_coexp_df.rds")
+
+
+####Convert data frame into matrixs
+Macrophage_normal_liver_reliable_coexp_mat <- Macrophage_matrix_list$Sharma2020
+saveRDS(Macrophage_normal_liver_reliable_coexp_mat,file="Pro_CoExpression/output/data/3CA/Liver/common_genesets/Macrophage/Macrophage_normal_liver_reliable_coexp_mat.rds")
