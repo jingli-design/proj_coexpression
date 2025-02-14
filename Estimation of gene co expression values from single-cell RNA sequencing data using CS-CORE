@@ -1,0 +1,1597 @@
+##################################################################################################
+####Estimation of gene co expression values from single-cell RNA sequencing data using CS-CORE####
+##################################################################################################
+##############################################
+####1.  Breast cancer(all are primary cancer)####
+################################################
+#####1.1 Azizi2018 dataset(all are T-cells)####
+library(Matrix)
+library(Seurat)
+library(readr)
+Azizi2018_metadata                     <- read_csv("Pro_CoExpression/data/3CA/Breast_cancer/Data_Azizi2018_Breast/Meta-data.csv")
+Azizi2018_matrix                       <- readMM("Pro_CoExpression/data/3CA/Breast_cancer/Data_Azizi2018_Breast/10x_allTcells/Exp_data_UMIcounts.mtx")
+Cells                                  <- read_csv("Pro_CoExpression/data/3CA/Breast_cancer/Data_Azizi2018_Breast/10x_allTcells/Cells.csv")
+table(Cells$cell_type)
+table(Cells$sample)
+gene                                   <- read.delim("Pro_CoExpression/data/3CA/Breast_cancer/Data_Azizi2018_Breast/10x_allTcells/Genes.txt",sep = "\t",header = F)
+rownames(Azizi2018_matrix)             <- gene$V1
+colnames(Azizi2018_matrix)             <- Cells$cell_name
+Azizi2018_scRNA                        <- CreateSeuratObject(counts = Azizi2018_matrix)
+Azizi2018_scRNA$orig.ident             <- Cells$sample
+Azizi2018_scRNA$cell_type              <- Cells$cell_type
+saveRDS(Azizi2018_scRNA,file = "Pro_CoExpression/output/data/3CA/Breast/Azizi2018_Breast/Azizi2018_scRNA.rds")
+
+library(CSCORE)
+DefaultAssay(Azizi2018_scRNA)          <- 'RNA'
+celltype_interest                      <- c("T_cell")
+Azizi2018_CSCORE_cor                   <- list()
+Azizi2018_CSCORE_padj                  <- list()
+for (i in 1:length(celltype_interest)) {
+  Azizi2018_celltype_scRNA             <- subset(Azizi2018_scRNA,cell_type==celltype_interest[i])
+  gene_expression_prop                 <- rowMeans(Azizi2018_celltype_scRNA@assays$RNA@counts > 0) #Calculate the expression ratio of each gene in cells
+  threshold                            <- 0.1  
+  genes_selected                       <- rownames(Azizi2018_celltype_scRNA@assays$RNA@counts)[gene_expression_prop > threshold]
+  CSCORE_result                        <- CSCORE(Azizi2018_celltype_scRNA, genes = genes_selected)
+  CSCORE_cor                           <- CSCORE_result$est
+  Azizi2018_CSCORE_cor                 <- append(Azizi2018_CSCORE_cor,list(CSCORE_cor))
+  CSCORE_p                             <- CSCORE_result$p_value
+  p_matrix_BH = matrix(0, length(genes_selected), length(genes_selected))
+  p_matrix_BH[upper.tri(CSCORE_p)] = p.adjust(CSCORE_p[upper.tri(CSCORE_p)], method = "BH")
+  p_matrix_BH                          <- p_matrix_BH + t(p_matrix_BH)
+  Azizi2018_CSCORE_padj                <- append(Azizi2018_CSCORE_padj,list(p_matrix_BH))
+}
+
+names(Azizi2018_CSCORE_cor)            <- celltype_interest
+names(Azizi2018_CSCORE_padj)           <- celltype_interest
+saveRDS(Azizi2018_CSCORE_cor,file = "Pro_CoExpression/output/data/3CA/Breast/Azizi2018_Breast/Azizi2018_CSCORE_cor.rds")
+saveRDS(Azizi2018_CSCORE_padj,file = "Pro_CoExpression/output/data/3CA/Breast/Azizi2018_Breast/Azizi2018_CSCORE_padj.rds")
+
+
+#####1.2 Bassez2021 dataset####
+library(tibble)
+counts_cells_cohort1                   <- readRDS("~/Pro_TNBC/data/scRNASeq/Data_Bassez2021_Breast/1863-counts_cells_cohort1.rds")
+Bassez2021_scRNA_1                     <- CreateSeuratObject(counts = counts_cells_cohort1)
+BIOKEY_metaData_cohort1_web            <- read_csv("Pro_TNBC/data/scRNASeq/Data_Bassez2021_Breast/1872-BIOKEY_metaData_cohort1_web.csv")
+BIOKEY_metaData_cohort1_web            <- column_to_rownames(BIOKEY_metaData_cohort1_web,var = "Cell")
+Bassez2021_scRNA_1@meta.data           <- BIOKEY_metaData_cohort1_web
+table(Bassez2021_scRNA_1$cellType)
+
+counts_cells_cohort2                   <- readRDS("~/Pro_TNBC/data/scRNASeq/Data_Bassez2021_Breast/1867-counts_cells_cohort2.rds")
+Bassez2021_scRNA_2                     <- CreateSeuratObject(counts = counts_cells_cohort2)
+BIOKEY_metaData_cohort2_web            <- read_csv("Pro_TNBC/data/scRNASeq/Data_Bassez2021_Breast/1871-BIOKEY_metaData_cohort2_web.csv")
+BIOKEY_metaData_cohort2_web            <- column_to_rownames(BIOKEY_metaData_cohort2_web,var = "Cell")
+Bassez2021_scRNA_2@meta.data           <- BIOKEY_metaData_cohort2_web
+table(Bassez2021_scRNA_2$cellType)
+
+Bassez2021_scRNA                       <- merge(Bassez2021_scRNA_1,Bassez2021_scRNA_2)
+library(CSCORE)
+DefaultAssay(Bassez2021_scRNA)        <- 'RNA'
+celltype_interest                     <- c("B_cell","T_cell","Fibroblast","Cancer_cell","Endothelial_cell")
+celltype_interest_1                   <- c("B_cell","T_cell","Fibroblast","Malignant","Endothelial")
+Bassez2021_CSCORE_cor                 <- list()
+Bassez2021_CSCORE_padj                <- list()
+for (i in 1:length(celltype_interest)) {
+  Bassez2021_celltype_scRNA             <- subset(Bassez2021_scRNA,cellType==celltype_interest[i])
+  gene_expression_prop                 <- rowMeans(Bassez2021_celltype_scRNA@assays$RNA@counts > 0) #Calculate the expression ratio of each gene in cells
+  threshold                            <- 0.1  
+  genes_selected                       <- rownames(Bassez2021_celltype_scRNA@assays$RNA@counts)[gene_expression_prop > threshold]
+  CSCORE_result                        <- CSCORE(Bassez2021_celltype_scRNA, genes = genes_selected)
+  CSCORE_cor                           <- CSCORE_result$est
+  Bassez2021_CSCORE_cor                 <- append(Bassez2021_CSCORE_cor,list(CSCORE_cor))
+  CSCORE_p                             <- CSCORE_result$p_value
+  p_matrix_BH = matrix(0, length(genes_selected), length(genes_selected))
+  p_matrix_BH[upper.tri(CSCORE_p)] = p.adjust(CSCORE_p[upper.tri(CSCORE_p)], method = "BH")
+  p_matrix_BH                          <- p_matrix_BH + t(p_matrix_BH)
+  Bassez2021_CSCORE_padj                <- append(Bassez2021_CSCORE_padj,list(p_matrix_BH))
+}
+
+names(Bassez2021_CSCORE_cor)      <- celltype_interest_1
+names(Bassez2021_CSCORE_padj)     <- celltype_interest_1
+saveRDS(Bassez2021_CSCORE_cor,file = "Pro_CoExpression/output/data/3CA/Breast/Bassez2021_Breast/Bassez2021_CSCORE_cor.rds")
+saveRDS(Bassez2021_CSCORE_padj,file = "Pro_CoExpression/output/data/3CA/Breast/Bassez2021_Breast/Bassez2021_CSCORE_padj.rds")
+
+
+#####1.3 Gao2021 dataset####
+Gao2021_metadata                        <- read_csv("/home/BioklabData/3CA/Data/Breast/Data_Gao2021_Breast/Meta-data.csv")
+Gao2021_matrix_1                        <- readMM("/home/BioklabData/3CA/Data/Breast/Data_Gao2021_Breast/Breast/Exp_data_UMIcounts.mtx")
+Cells_1                                 <- read_csv("/home/BioklabData/3CA/Data/Breast/Data_Gao2021_Breast/Breast/Cells.csv")
+Cells_1$cell_id                         <- paste(Cells_1$sample,Cells_1$cell_name,sep = "_")
+table(Cells_1$cell_type)
+table(Cells_1$sample)
+gene_1                                  <- read.delim("/home/BioklabData/3CA/Data/Breast/Data_Gao2021_Breast/Breast/Genes.txt",sep = "\t",header = F)
+rownames(Gao2021_matrix_1)              <- gene_1$V1
+colnames(Gao2021_matrix_1)              <- Cells_1$cell_id
+Gao2021_scRNA_1                         <- CreateSeuratObject(counts = Gao2021_matrix_1)
+Gao2021_brca_cell_1                     <- subset(Cells_1,sample !="DCIS1")
+Gao2021_brca_scRNA_1                    <- Gao2021_scRNA_1[,colnames(Gao2021_scRNA_1) %in% Gao2021_brca_cell_1$cell_id]
+
+Gao2021_matrix_2                        <- readMM("/home/BioklabData/3CA/Data/Breast/Data_Gao2021_Breast/Breast_and_thyroid/exp_data_UMIcountscells_breast_and_thyroid.mtx")
+Cells_2                                 <- read_csv("/home/BioklabData/3CA/Data/Breast/Data_Gao2021_Breast/Breast_and_thyroid/Cells_breast_and_thyroid.csv")
+Cells_2$cell_id                         <- paste(Cells_2$sample,Cells_2$cell_name,sep = "_")
+table(Cells_2$cell_type)
+table(Cells_2$sample)
+gene_2                                  <- read.delim("/home/BioklabData/3CA/Data/Breast/Data_Gao2021_Breast/Breast_and_thyroid/genes_breast_and_thyroid.txt",sep = "\t",header = F)
+rownames(Gao2021_matrix_2)              <- gene_2$V1
+colnames(Gao2021_matrix_2)              <- Cells_2$cell_id
+Gao2021_scRNA_2                         <- CreateSeuratObject(counts = Gao2021_matrix_2)
+Gao2021_brca_cell_2                     <- subset(Cells_2,sample =="TNBC4"|sample=="TNBC5")
+Gao2021_brca_scRNA_2                    <- Gao2021_scRNA_2[,colnames(Gao2021_scRNA_2) %in% Gao2021_brca_cell_2$cell_id]
+common_gene                             <- intersect(gene_1$V1,gene_2$V1)
+Gao2021_brca_scRNA_1                    <- Gao2021_brca_scRNA_1[common_gene,]
+Gao2021_brca_scRNA_2                    <- Gao2021_brca_scRNA_2[common_gene,]
+identical(rownames(Gao2021_brca_scRNA_1),rownames(Gao2021_brca_scRNA_2))
+Gao2021_brca_scRNA                      <- merge(Gao2021_brca_scRNA_1,Gao2021_brca_scRNA_2)
+Gao2021_brca_cell                       <- rbind(Gao2021_brca_cell_1,Gao2021_brca_cell_2)
+table(Gao2021_brca_cell$cell_type)
+Gao2021_brca_scRNA$celltype             <- Gao2021_brca_cell$cell_type
+saveRDS(Gao2021_brca_scRNA,file = "Pro_CoExpression/output/data/3CA/Breast/Gao2021_Breast/Gao2021_brca_scRNA.rds")
+library(CSCORE)
+DefaultAssay(Gao2021_brca_scRNA)      <- 'RNA'
+celltype_interest                     <- c("Macrophage","T_cell","Fibroblast","Malignant")
+Gao2021_CSCORE_cor                    <- list()
+Gao2021_CSCORE_padj                   <- list()
+for (i in 1:length(celltype_interest)) {
+  Gao2021_celltype                    <- subset(Gao2021_brca_cell,cell_type==celltype_interest[i])
+  Gao2021_celltype_scRNA              <- Gao2021_brca_scRNA[,colnames(Gao2021_brca_scRNA) %in% Gao2021_celltype$cell_id]
+  gene_expression_prop                <- rowMeans(Gao2021_celltype_scRNA@assays$RNA@counts > 0) #Calculate the expression ratio of each gene in cells
+  threshold                           <- 0.1  
+  genes_selected                      <- rownames(Gao2021_celltype_scRNA@assays$RNA@counts)[gene_expression_prop > threshold]
+  CSCORE_result                       <- CSCORE(Gao2021_celltype_scRNA, genes = genes_selected)
+  CSCORE_cor                          <- CSCORE_result$est
+  Gao2021_CSCORE_cor                  <- append(Gao2021_CSCORE_cor,list(CSCORE_cor))
+  CSCORE_p                            <- CSCORE_result$p_value
+  p_matrix_BH = matrix(0, length(genes_selected), length(genes_selected))
+  p_matrix_BH[upper.tri(CSCORE_p)] = p.adjust(CSCORE_p[upper.tri(CSCORE_p)], method = "BH")
+  p_matrix_BH                         <- p_matrix_BH + t(p_matrix_BH)
+  Gao2021_CSCORE_padj                 <- append(Gao2021_CSCORE_padj,list(p_matrix_BH))
+}
+
+names(Gao2021_CSCORE_cor)             <- celltype_interest
+names(Gao2021_CSCORE_padj)            <- celltype_interest
+saveRDS(Gao2021_CSCORE_cor,file = "Pro_CoExpression/output/data/3CA/Breast/Gao2021_Breast/Gao2021_CSCORE_cor.rds")
+saveRDS(Gao2021_CSCORE_padj,file = "Pro_CoExpression/output/data/3CA/Breast/Gao2021_Breast/Gao2021_CSCORE_padj.rds")
+
+
+#####1.4 Griffiths2021 dataset(all are malignant,but time_point for therapy)####
+Griffiths2021_metadata                  <- read_csv("Pro_CoExpression/data/3CA/Breast_cancer/Data_Griffiths2021_Breast/Meta-data.csv")
+Griffiths2021_matrix                    <- readMM("Pro_CoExpression/data/3CA/Breast_cancer/Data_Griffiths2021_Breast/10X/Exp_data_UMIcounts_10X.mtx")
+Cells                                   <- read_csv("Pro_CoExpression/data/3CA/Breast_cancer/Data_Griffiths2021_Breast/10X/Cells_10X.csv")
+table(Cells$cell_type)
+table(Cells$time_point)
+table(Cells$sample)
+gene                                    <- read.delim("Pro_CoExpression/data/3CA/Breast_cancer/Data_Griffiths2021_Breast/10X/Genes_10X.txt",sep = "\t",header = F)
+rownames(Griffiths2021_matrix)          <- gene$V1
+colnames(Griffiths2021_matrix)          <- Cells$cell_name
+Griffiths2021_scRNA                     <- CreateSeuratObject(counts = Griffiths2021_matrix)
+Griffiths2021_scRNA$celltype            <- Cells$cell_type
+saveRDS(Griffiths2021_scRNA,file="Pro_CoExpression/output/data/3CA/Breast/Griffiths2021_Breast/Griffiths2021_scRNA.rds")
+library(CSCORE)
+DefaultAssay(Griffiths2021_scRNA)     <- 'RNA'
+  gene_expression_prop                <- rowMeans(Griffiths2021_scRNA@assays$RNA@counts > 0) #Calculate the expression ratio of each gene in cells
+  threshold                           <- 0.1  
+  genes_selected                      <- rownames(Griffiths2021_scRNA@assays$RNA@counts)[gene_expression_prop > threshold]
+  CSCORE_result                       <- CSCORE(Griffiths2021_scRNA, genes = genes_selected)
+  Griffiths2021_CSCORE_cor            <- CSCORE_result$est
+  CSCORE_p                            <- CSCORE_result$p_value
+  p_matrix_BH = matrix(0, length(genes_selected), length(genes_selected))
+  p_matrix_BH[upper.tri(CSCORE_p)] = p.adjust(CSCORE_p[upper.tri(CSCORE_p)], method = "BH")
+  p_matrix_BH                         <- p_matrix_BH + t(p_matrix_BH)
+  Griffiths2021_CSCORE_padj           <- p_matrix_BH
+
+saveRDS(Griffiths2021_CSCORE_cor,file = "Pro_CoExpression/output/data/3CA/Breast/Griffiths2021_Breast/Griffiths2021_CSCORE_cor.rds")
+saveRDS(Griffiths2021_CSCORE_padj,file = "Pro_CoExpression/output/data/3CA/Breast/Griffiths2021_Breast/Griffiths2021_CSCORE_padj.rds")
+
+
+#####1.1.5 Pal2021 dataset####
+Pal2021_metadata                                    <- read_csv("/home/BioklabData/3CA/Data/Breast/Data_Pal2021_Breast/Meta-data.csv")
+####*normal tissue####
+Pal2021_group1_matrix                       <- readMM("/home/BioklabData/3CA/Data/Breast/Data_Pal2021_Breast/Group1/Exp_data_UMIcounts1.mtx")
+Cells_group1                                <- read_csv("/home/BioklabData/3CA/Data/Breast/Data_Pal2021_Breast/Group1/cells1.csv")
+table(Cells_group1$Annotation)
+table(Cells_group1$Sample)
+gene                                        <- read.delim("/home/BioklabData/3CA/Data/Breast/Data_Pal2021_Breast/Genes.txt",sep = "\t",header = F)
+
+rownames(Pal2021_group1_matrix)             <- gene$V1
+colnames(Pal2021_group1_matrix)             <- Cells_group1$Cell_names
+Pal2021_group1_scRNA                        <- CreateSeuratObject(counts = Pal2021_group1_matrix)
+Pal2021_group1_scRNA$orig.ident             <- Cells_group1$Sample
+Pal2021_group1_scRNA$cell_type              <- Cells_group1$Annotation
+Pal2021_group1_scRNA$is_cancer              <- Cells_group1$Is_Cancer
+all_samples                                 <- names(table(Cells_group1$Sample))
+normal_sample                               <- c("BRCA1_pre_neoplastic_0023","BRCA1_pre_neoplastic_0033","BRCA1_pre_neoplastic_0090","BRCA1_pre_neoplastic_0894")
+tumor_sample                                <- setdiff(all_samples,normal_sample)
+Pal2021_group1_normal_scRNA                 <- subset(Pal2021_group1_scRNA,orig.ident %in% normal_sample )
+table(Pal2021_group1_normal_scRNA$cell_type)
+saveRDS(Pal2021_group1_normal_scRNA,file = "Pro_CoExpression/output/data/3CA/Breast/Pal2021_Breast/Pal2021_normal_scRNA.rds")
+
+library(CSCORE)
+DefaultAssay(Pal2021_group1_normal_scRNA)    <- 'RNA'
+celltype_interest                            <- c("Fibroblast","Normal epithelium")
+Pal2021_normal_CSCORE_cor                    <- list()
+Pal2021_normal_CSCORE_padj                   <- list()
+for (i in 1:length(celltype_interest)) {
+  Pal2021_normal_celltype_scRNA       <- subset(Pal2021_group1_normal_scRNA,cell_type==celltype_interest[i])
+  gene_expression_prop                <- rowMeans(Pal2021_normal_celltype_scRNA@assays$RNA@counts > 0) #Calculate the expression ratio of each gene in cells
+  threshold                           <- 0.1  
+  genes_selected                      <- rownames(Pal2021_normal_celltype_scRNA@assays$RNA@counts)[gene_expression_prop > threshold]
+  CSCORE_result                       <- CSCORE(Pal2021_normal_celltype_scRNA, genes = genes_selected)
+  CSCORE_cor                          <- CSCORE_result$est
+  Pal2021_normal_CSCORE_cor           <- append(Pal2021_normal_CSCORE_cor,list(CSCORE_cor))
+  CSCORE_p                            <- CSCORE_result$p_value
+  p_matrix_BH = matrix(0, length(genes_selected), length(genes_selected))
+  p_matrix_BH[upper.tri(CSCORE_p)] = p.adjust(CSCORE_p[upper.tri(CSCORE_p)], method = "BH")
+  p_matrix_BH                         <- p_matrix_BH + t(p_matrix_BH)
+  Pal2021_normal_CSCORE_padj          <- append(Pal2021_normal_CSCORE_padj,list(p_matrix_BH))
+}
+
+names(Pal2021_normal_CSCORE_cor)      <- celltype_interest
+names(Pal2021_normal_CSCORE_padj)     <- celltype_interest
+saveRDS(Pal2021_normal_CSCORE_cor,file = "Pro_CoExpression/output/data/3CA/Breast/Pal2021_Breast/Pal2021_normal_CSCORE_cor.rds")
+saveRDS(Pal2021_normal_CSCORE_padj,file = "Pro_CoExpression/output/data/3CA/Breast/Pal2021_Breast/Pal2021_normal_CSCORE_padj.rds")
+
+####*tumor tissue####
+Pal2021_group1_tumor_scRNA                 <- subset(Pal2021_group1_scRNA,orig.ident %in% tumor_sample )
+table(Pal2021_group1_tumor_scRNA$cell_type)
+Pal2021_group2_matrix                       <- readMM("/home/BioklabData/3CA/Data/Breast/Data_Pal2021_Breast/Group2/Exp_data_UMIcounts2.mtx")
+Cells_group2                                <- read_csv("/home/BioklabData/3CA/Data/Breast/Data_Pal2021_Breast/Group2/cells2.csv")
+table(Cells_group2$Annotation)
+table(Cells_group2$Sample)
+gene                                        <- read.delim("/home/BioklabData/3CA/Data/Breast/Data_Pal2021_Breast/Genes.txt",sep = "\t",header = F)
+rownames(Pal2021_group2_matrix)             <- gene$V1
+colnames(Pal2021_group2_matrix)             <- Cells_group2$Cell_names
+Pal2021_group2_scRNA                        <- CreateSeuratObject(counts = Pal2021_group2_matrix)
+Pal2021_group2_scRNA$orig.ident             <- Cells_group2$Sample
+Pal2021_group2_scRNA$cell_type              <- Cells_group2$Annotation
+Pal2021_group2_scRNA$is_cancer              <- Cells_group2$Is_Cancer
+
+Pal2021_group3_matrix                       <- readMM("/home/BioklabData/3CA/Data/Breast/Data_Pal2021_Breast/Group3/Exp_data_UMIcounts3.mtx")
+Cells_group3                                <- read_csv("/home/BioklabData/3CA/Data/Breast/Data_Pal2021_Breast/Group3/cells3.csv")
+table(Cells_group3$Annotation)
+table(Cells_group3$Sample)
+gene                                        <- read.delim("/home/BioklabData/3CA/Data/Breast/Data_Pal2021_Breast/Genes.txt",sep = "\t",header = F)
+rownames(Pal2021_group3_matrix)             <- gene$V1
+colnames(Pal2021_group3_matrix)             <- Cells_group3$Cell_names
+Pal2021_group3_scRNA                        <- CreateSeuratObject(counts = Pal2021_group3_matrix)
+Pal2021_group3_scRNA$orig.ident             <- Cells_group3$Sample
+Pal2021_group3_scRNA$cell_type              <- Cells_group3$Annotation
+Pal2021_group3_scRNA$is_cancer              <- Cells_group3$Is_Cancer
+
+Pal2021_group4_matrix                       <- readMM("/home/BioklabData/3CA/Data/Breast/Data_Pal2021_Breast/Group4/Exp_data_UMIcounts4.mtx")
+Cells_group4                                <- read_csv("/home/BioklabData/3CA/Data/Breast/Data_Pal2021_Breast/Group4/cells4.csv")
+table(Cells_group4$Annotation)
+table(Cells_group4$Sample)
+gene                                        <- read.delim("/home/BioklabData/3CA/Data/Breast/Data_Pal2021_Breast/Genes.txt",sep = "\t",header = F)
+rownames(Pal2021_group4_matrix)             <- gene$V1
+colnames(Pal2021_group4_matrix)             <- Cells_group4$Cell_names
+Pal2021_group4_scRNA                        <- CreateSeuratObject(counts = Pal2021_group4_matrix)
+Pal2021_group4_scRNA$orig.ident             <- Cells_group4$Sample
+Pal2021_group4_scRNA$cell_type              <- Cells_group4$Annotation
+Pal2021_group4_scRNA$is_cancer              <- Cells_group4$Is_Cancer
+
+Pal2021_group5_matrix                       <- readMM("/home/BioklabData/3CA/Data/Breast/Data_Pal2021_Breast/Group5/Exp_data_UMIcounts5.mtx")
+Cells_group5                                <- read_csv("/home/BioklabData/3CA/Data/Breast/Data_Pal2021_Breast/Group5/cells5.csv")
+table(Cells_group5$Annotation)
+table(Cells_group5$Sample)
+gene                                        <- read.delim("/home/BioklabData/3CA/Data/Breast/Data_Pal2021_Breast/Genes.txt",sep = "\t",header = F)
+rownames(Pal2021_group5_matrix)             <- gene$V1
+colnames(Pal2021_group5_matrix)             <- Cells_group5$Cell_names
+Pal2021_group5_scRNA                        <- CreateSeuratObject(counts = Pal2021_group5_matrix)
+Pal2021_group5_scRNA$orig.ident             <- Cells_group5$Sample
+Pal2021_group5_scRNA$cell_type              <- Cells_group5$Annotation
+Pal2021_group5_scRNA$is_cancer              <- Cells_group5$Is_Cancer
+identical(rownames(Pal2021_group1_tumor_scRNA),rownames(Pal2021_group2_scRNA))
+identical(rownames(Pal2021_group2_scRNA),rownames(Pal2021_group3_scRNA))
+identical(rownames(Pal2021_group3_scRNA),rownames(Pal2021_group4_scRNA))
+identical(rownames(Pal2021_group4_scRNA),rownames(Pal2021_group5_scRNA))
+Pal2021_tumor_scRNA               <- merge(x=Pal2021_group1_tumor_scRNA,y=c(Pal2021_group2_scRNA,Pal2021_group3_scRNA,Pal2021_group4_scRNA,Pal2021_group5_scRNA))
+Pal2021_tumor_metadata            <- Pal2021_tumor_scRNA@meta.data
+Pal2021_tumor_metadata            <- Pal2021_tumor_metadata %>%
+  mutate(celltype = ifelse(cell_type == "Epithelial" & is_cancer == 1, "Cancer_cell",
+                          ifelse(cell_type == "Epithelial" & is_cancer == 0, "Normal epithelium",as.character(cell_type))))
+Pal2021_tumor_scRNA@meta.data     <- Pal2021_tumor_metadata 
+LN_sample                             <- c("ER_positive_LN_0040","ER_positive_LN_0043","ER_positive_LN_0064","ER_positive_LN_0068","ER_positive_LN_0167","ER_positive_LN_0173")  
+primary_sample                        <- setdiff(names(table(Pal2021_tumor_scRNA$orig.ident)),LN_sample)
+
+####**primary####
+Pal2021_tumor_primary_scRNA                   <- subset(Pal2021_tumor_scRNA,orig.ident  %in% primary_sample)
+library(CSCORE)
+DefaultAssay(Pal2021_tumor_primary_scRNA)     <- 'RNA'
+celltype_interest                             <- c("Fibroblast","Cancer_cell","Endothelial")
+Pal2021_tumor_primary_CSCORE_cor              <- list()
+Pal2021_tumor_primary_CSCORE_padj             <- list()
+for (i in 1:length(celltype_interest)) {
+  Pal2021_tumor_primary_celltype_scRNA        <- subset(Pal2021_tumor_primary_scRNA,celltype==celltype_interest[i])
+  gene_expression_prop                <- rowMeans(Pal2021_tumor_primary_celltype_scRNA@assays$RNA@counts > 0) #Calculate the expression ratio of each gene in cells
+  threshold                           <- 0.1  
+  genes_selected                      <- rownames(Pal2021_tumor_primary_celltype_scRNA@assays$RNA@counts)[gene_expression_prop > threshold]
+  CSCORE_result                       <- CSCORE(Pal2021_tumor_primary_celltype_scRNA, genes = genes_selected)
+  CSCORE_cor                          <- CSCORE_result$est
+  Pal2021_tumor_primary_CSCORE_cor            <- append(Pal2021_tumor_primary_CSCORE_cor,list(CSCORE_cor))
+  CSCORE_p                            <- CSCORE_result$p_value
+  p_matrix_BH = matrix(0, length(genes_selected), length(genes_selected))
+  p_matrix_BH[upper.tri(CSCORE_p)] = p.adjust(CSCORE_p[upper.tri(CSCORE_p)], method = "BH")
+  p_matrix_BH                         <- p_matrix_BH + t(p_matrix_BH)
+  Pal2021_tumor_primary_CSCORE_padj           <- append(Pal2021_tumor_primary_CSCORE_padj,list(p_matrix_BH))
+}
+
+names(Pal2021_tumor_primary_CSCORE_cor)       <- celltype_interest
+names(Pal2021_tumor_primary_CSCORE_padj)      <- celltype_interest
+saveRDS(Pal2021_tumor_primary_CSCORE_cor,file = "Pro_CoExpression/output/data/3CA/Breast/Pal2021_Breast/Pal2021_tumor_primary_CSCORE_cor.rds")
+saveRDS(Pal2021_tumor_primary_CSCORE_padj,file = "Pro_CoExpression/output/data/3CA/Breast/Pal2021_Breast/Pal2021_tumor_primary_CSCORE_padj.rds")
+saveRDS(Pal2021_tumor_primary_scRNA,file = "Pro_CoExpression/output/data/3CA/Breast/Pal2021_Breast/Pal2021_tumor_primary_scRNA.rds")
+
+
+#####1.6 Qian2020 dataset####
+Qian2020_metadata                           <- read_csv("/home/BioklabData/3CA/Data/Breast/Data_Qian2020_Breast/Meta-data.csv")
+Qian2020_matrix                             <- readMM("/home/BioklabData/3CA/Data/Breast/Data_Qian2020_Breast/Exp_data_UMIcounts.mtx")
+Cells                                       <- read_csv("/home/BioklabData/3CA/Data/Breast/Data_Qian2020_Breast/Cells.csv")
+table(Cells$cell_type)
+table(Cells$sample)
+gene                                        <- read.delim("/home/BioklabData/3CA/Data/Breast/Data_Qian2020_Breast/Genes.txt",sep = "\t",header = F)
+
+rownames(Qian2020_matrix)                   <- gene$V1
+colnames(Qian2020_matrix)                   <- Cells$cell_name
+Qian2020_scRNA                              <- CreateSeuratObject(counts = Qian2020_matrix)
+Qian2020_scRNA$orig.ident                   <- Cells$sample
+Qian2020_scRNA$cell_type                    <- Cells$cell_type
+saveRDS(Qian2020_scRNA,file = "Pro_CoExpression/output/data/3CA/Breast/Qian2020_Breast/Qian2020_scRNA.rds")
+library(CSCORE)
+DefaultAssay(Qian2020_scRNA)          <- 'RNA'
+celltype_interest                     <- c("B_cell","T_cell","Fibroblast","Malignant","Endothelial","Macrophage")
+Qian2020_CSCORE_cor                   <- list()
+Qian2020_CSCORE_padj                  <- list()
+for (i in 1:length(celltype_interest)) {
+  Qian2020_celltype_scRNA             <- subset(Qian2020_scRNA,cell_type==celltype_interest[i])
+  gene_expression_prop                <- rowMeans(Qian2020_celltype_scRNA@assays$RNA@counts > 0) #Calculate the expression ratio of each gene in cells
+  threshold                           <- 0.1  
+  genes_selected                      <- rownames(Qian2020_celltype_scRNA@assays$RNA@counts)[gene_expression_prop > threshold]
+  CSCORE_result                       <- CSCORE(Qian2020_celltype_scRNA, genes = genes_selected)
+  CSCORE_cor                          <- CSCORE_result$est
+  Qian2020_CSCORE_cor                 <- append(Qian2020_CSCORE_cor,list(CSCORE_cor))
+  CSCORE_p                            <- CSCORE_result$p_value
+  p_matrix_BH = matrix(0, length(genes_selected), length(genes_selected))
+  p_matrix_BH[upper.tri(CSCORE_p)] = p.adjust(CSCORE_p[upper.tri(CSCORE_p)], method = "BH")
+  p_matrix_BH                         <- p_matrix_BH + t(p_matrix_BH)
+  Qian2020_CSCORE_padj                <- append(Qian2020_CSCORE_padj,list(p_matrix_BH))
+}
+
+names(Qian2020_CSCORE_cor)           <- celltype_interest
+names(Qian2020_CSCORE_padj)          <- celltype_interest
+saveRDS(Qian2020_CSCORE_cor,file = "Pro_CoExpression/output/data/3CA/Breast/Qian2020_Breast/Qian2020_CSCORE_cor.rds")
+saveRDS(Qian2020_CSCORE_padj,file = "Pro_CoExpression/output/data/3CA/Breast/Qian2020_Breast/Qian2020_CSCORE_padj.rds")
+
+
+#####1.7 Savas2018 dataset(all are T-cells)####
+Savas2018_metadata                                    <- read_csv("Pro_CoExpression/data/3CA/Breast_cancer/Data_Savas2018_Breast/Meta-data.csv")
+Savas2018_matrix                             <- readMM("Pro_CoExpression/data/3CA/Breast_cancer/Data_Savas2018_Breast/Exp_data_UMIcounts.mtx")
+Cells                                        <- read_csv("Pro_CoExpression/data/3CA/Breast_cancer/Data_Savas2018_Breast/Cells.csv")
+table(Cells$cell_type)
+table(Cells$sample)
+gene                                        <- read.delim("Pro_CoExpression/data/3CA/Breast_cancer/Data_Savas2018_Breast/Genes.txt",sep = "\t",header = F)
+
+rownames(Savas2018_matrix)             <- gene$V1
+colnames(Savas2018_matrix)             <- Cells$cell_name
+Savas2018_scRNA                        <- CreateSeuratObject(counts = Savas2018_matrix)
+Savas2018_scRNA$orig.ident             <- Cells$sample
+Savas2018_scRNA$cell_type              <- Cells$cell_type
+saveRDS(Savas2018_scRNA,file="Pro_CoExpression/output/data/3CA/Breast/Savas2018_Breast/Savas2018_scRNA.rds")
+library(CSCORE)
+DefaultAssay(Savas2018_scRNA)          <- 'RNA'
+celltype_interest                      <- c("T_cell")
+Savas2018_CSCORE_cor                   <- list()
+Savas2018_CSCORE_padj                  <- list()
+for (i in 1:length(celltype_interest)) {
+  Savas2018_celltype_scRNA             <- subset(Savas2018_scRNA,cell_type==celltype_interest[i])
+  gene_expression_prop                 <- rowMeans(Savas2018_celltype_scRNA@assays$RNA@counts > 0) #Calculate the expression ratio of each gene in cells
+  threshold                            <- 0.1  
+  genes_selected                       <- rownames(Savas2018_celltype_scRNA@assays$RNA@counts)[gene_expression_prop > threshold]
+  CSCORE_result                        <- CSCORE(Savas2018_celltype_scRNA, genes = genes_selected)
+  CSCORE_cor                           <- CSCORE_result$est
+  Savas2018_CSCORE_cor                 <- append(Savas2018_CSCORE_cor,list(CSCORE_cor))
+  CSCORE_p                             <- CSCORE_result$p_value
+  p_matrix_BH = matrix(0, length(genes_selected), length(genes_selected))
+  p_matrix_BH[upper.tri(CSCORE_p)] = p.adjust(CSCORE_p[upper.tri(CSCORE_p)], method = "BH")
+  p_matrix_BH                          <- p_matrix_BH + t(p_matrix_BH)
+  Savas2018_CSCORE_padj                <- append(Savas2018_CSCORE_padj,list(p_matrix_BH))
+}
+
+names(Savas2018_CSCORE_cor)           <- celltype_interest
+names(Savas2018_CSCORE_padj)          <- celltype_interest
+saveRDS(Savas2018_CSCORE_cor,file = "Pro_CoExpression/output/data/3CA/Breast/Savas2018_Breast/Savas2018_CSCORE_cor.rds")
+saveRDS(Savas2018_CSCORE_padj,file = "Pro_CoExpression/output/data/3CA/Breast/Savas2018_Breast/Savas2018_CSCORE_padj.rds")
+
+
+#####1.8 Wu2021 dataset####
+library(Matrix)
+library(readr)
+library(Seurat)
+library(CSCORE)
+Wu2021_metadata                             <- read_csv("Pro_CoExpression/data/3CA/Breast_cancer/Data_Wu2022_Breast/Meta-data.csv")
+Wu2021_matrix                               <- readMM("Pro_CoExpression/data/3CA/Breast_cancer/Data_Wu2022_Breast/Exp_data_UMIcounts.mtx")
+Cells                                       <- read_csv("Pro_CoExpression/data/3CA/Breast_cancer/Data_Wu2022_Breast/Cells.csv")
+table(Cells$cell_type)
+table(Cells$sample)
+gene                                        <- read.delim("Pro_CoExpression/data/3CA/Breast_cancer/Data_Wu2022_Breast/Genes.txt",sep = "\t",header = F)
+
+rownames(Wu2021_matrix)                     <- gene$V1
+colnames(Wu2021_matrix)                     <- Cells$cell_name
+Wu2021_scRNA                                <- CreateSeuratObject(counts = Wu2021_matrix)
+Wu2021_scRNA$orig.ident                     <- Cells$sample
+Wu2021_scRNA$cell_type                      <- Cells$cell_type
+saveRDS(Wu2021_scRNA,file = "Pro_CoExpression/output/data/3CA/Breast/Wu2021_Breast/Wu2021_scRNA.rds")
+
+DefaultAssay(Wu2021_scRNA)            <- 'RNA'
+celltype_interest                     <- c("B_cell","T_cell","Fibroblast","Malignant","Endothelial","Macrophage")
+Wu2021_CSCORE_cor                     <- list()
+Wu2021_CSCORE_padj                    <- list()
+for (i in 1:length(celltype_interest)) {
+  Wu2021_celltype_scRNA               <- subset(Wu2021_scRNA,cell_type==celltype_interest[i])
+  gene_expression_prop                <- rowMeans(Wu2021_celltype_scRNA@assays$RNA@counts > 0) #Calculate the expression ratio of each gene in cells
+  threshold                           <- 0.1  
+  genes_selected                      <- rownames(Wu2021_celltype_scRNA@assays$RNA@counts)[gene_expression_prop > threshold]
+  CSCORE_result                       <- CSCORE(Wu2021_celltype_scRNA, genes = genes_selected)
+  CSCORE_cor                          <- CSCORE_result$est
+  Wu2021_CSCORE_cor                   <- append(Wu2021_CSCORE_cor,list(CSCORE_cor))
+  CSCORE_p                            <- CSCORE_result$p_value
+  p_matrix_BH = matrix(0, length(genes_selected), length(genes_selected))
+  p_matrix_BH[upper.tri(CSCORE_p)] = p.adjust(CSCORE_p[upper.tri(CSCORE_p)], method = "BH")
+  p_matrix_BH                         <- p_matrix_BH + t(p_matrix_BH)
+  Wu2021_CSCORE_padj                  <- append(Wu2021_CSCORE_padj,list(p_matrix_BH))
+}
+
+names(Wu2021_CSCORE_cor)              <- celltype_interest
+names(Wu2021_CSCORE_padj)             <- celltype_interest
+saveRDS(Wu2021_CSCORE_cor,file = "Pro_CoExpression/output/data/3CA/Breast/Wu2021_Breast/Wu2021_CSCORE_cor.rds")
+saveRDS(Wu2021_CSCORE_padj,file = "Pro_CoExpression/output/data/3CA/Breast/Wu2021_Breast/Wu2021_CSCORE_padj.rds")
+
+
+####create a metadata for breast cancer samples####
+Azizi2018_meta_data          <- subset(Azizi2018_metadata,technology=="10x")
+Azizi2018_meta_data          <- Azizi2018_meta_data[,1,drop=F]  %>% mutate(sample_primary_met=rep("primary",5),site=rep("Breast",5),dataset = rep("Azizi2018_Breast",5))
+Bassez2021_meta_data         <- Bassez2021_metadata[,1,drop=F]  %>% mutate(sample_primary_met=rep("primary",42),site=rep("Breast",42),dataset = rep("Bassez2021_Breast",42))
+Gao2021_meta_data            <- subset(Gao2021_metadata,cancer_type=="Breast cancer")
+Gao2021_meta_data            <- Gao2021_meta_data[,2,drop=F]  %>% mutate(sample_primary_met=rep("primary",6),site=rep("Breast",6),dataset = rep("Gao2021_Breast",6))
+Griffiths2021_meta_data      <- subset(Griffiths2021_metadata,technology=="10x")
+Griffiths2021_meta_data      <- Griffiths2021_meta_data[,1,drop=F]  %>% mutate(sample_primary_met=rep("primary",82),site=rep("Breast",82),dataset = rep("Griffiths2021_Breast",82))
+Pal2021_meta_data            <- Pal2021_metadata[,2,drop=F]  %>% mutate(sample_primary_met=c(rep("normal",4),rep("primary",20),rep("met",6),rep("primary",15))
+                                                                           ,site=c(rep("normal_breast",4),rep("tumor_breast",20),rep("LN",6),rep("tumor_breast",15))
+                                                                           ,dataset = rep("Pal2021_Breast",45))
+Qian2020_meta_data             <- Qian2020_metadata[,2,drop=F]  %>% mutate(sample_primary_met=rep("primary",7),site=rep("Breast",7),dataset = rep("Qian2020_Breast",7))
+Qian2020_meta_data$sample      <- as.character(Qian2020_meta_data$sample)
+Savas2018_meta_data            <- Savas2018_metadata[,1,drop=F]  %>% mutate(sample_primary_met=rep("primary",2),site=rep("Breast",2),dataset = rep("Savas2018_Breast",2))
+Savas2018_meta_data$sample     <- as.character(Savas2018_meta_data$sample)
+Wu2021_meta_data               <- Wu2021_metadata[,1,drop=F]  %>% mutate(sample_primary_met=rep("primary",26),site=rep("Breast",26),dataset = rep("Wu2021_Breast",26))
+Breast_metadata                <- bind_rows(Azizi2018_meta_data,Bassez2021_meta_data,Gao2021_meta_data,Griffiths2021_meta_data,Pal2021_meta_data,Qian2020_meta_data,Savas2018_meta_data,Wu2021_meta_data)
+write.csv(Breast_metadata,file = "Pro_CoExpression/output/data/3CA/Breast/Breast_metadata.csv")
+
+############################################################################
+####2 Liver/Biliary####
+####################################################################
+
+#####2.1 Ma2019 dataset####
+library(Seurat)
+library(readr)
+library(Matrix)
+library(CSCORE)
+Ma2019_metadata                             <- read_csv("/home/BioklabData/3CA/Data/Liver-Biliary/Data_Ma2019_Liver-Biliary/Meta-data.csv")
+Ma2019_matrix                               <- readMM("/home/BioklabData/3CA/Data/Liver-Biliary/Data_Ma2019_Liver-Biliary/Exp_data_UMIcounts.mtx")
+Cells                                       <- read_csv("/home/BioklabData/3CA/Data/Liver-Biliary/Data_Ma2019_Liver-Biliary/Cells.csv")
+table(Cells$cell_type)
+table(Cells$sample)
+gene                                        <- read.delim("/home/BioklabData/3CA/Data/Liver-Biliary/Data_Ma2019_Liver-Biliary/Genes.txt",sep = "\t",header = F)
+
+rownames(Ma2019_matrix)             <- gene$V1
+colnames(Ma2019_matrix)             <- Cells$cell_name
+Ma2019_scRNA                        <- CreateSeuratObject(counts = Ma2019_matrix)
+Ma2019_scRNA$orig.ident             <- Cells$sample
+Ma2019_scRNA$cell_type              <- Cells$cell_type
+HCC_sample                          <- c("C46","H37","H38","H65")
+Ma2019_HCC_scRNA                    <- subset(Ma2019_scRNA,orig.ident %in% HCC_sample)
+table(Ma2019_HCC_scRNA$cell_type)
+
+library(CSCORE)
+DefaultAssay(Ma2019_HCC_scRNA)        <- 'RNA'
+celltype_interest                     <- c("Macrophage","Fibroblast","Malignant","Endothelial")
+Ma2019_CSCORE_cor                     <- list()
+Ma2019_CSCORE_padj                    <- list()
+for (i in 1:length(celltype_interest)) {
+  Ma2019_celltype_scRNA               <- subset(Ma2019_HCC_scRNA,cell_type==celltype_interest[i])
+  gene_expression_prop                <- rowMeans(Ma2019_celltype_scRNA@assays$RNA@counts > 0) #Calculate the expression ratio of each gene in cells
+  threshold                           <- 0.1  
+  genes_selected                      <- rownames(Ma2019_celltype_scRNA@assays$RNA@counts)[gene_expression_prop > threshold]
+  CSCORE_result                       <- CSCORE(Ma2019_celltype_scRNA, genes = genes_selected)
+  CSCORE_cor                          <- CSCORE_result$est
+  Ma2019_CSCORE_cor                   <- append(Ma2019_CSCORE_cor,list(CSCORE_cor))
+  CSCORE_p                            <- CSCORE_result$p_value
+  p_matrix_BH = matrix(0, length(genes_selected), length(genes_selected))
+  p_matrix_BH[upper.tri(CSCORE_p)] = p.adjust(CSCORE_p[upper.tri(CSCORE_p)], method = "BH")
+  p_matrix_BH                         <- p_matrix_BH + t(p_matrix_BH)
+  Ma2019_CSCORE_padj                  <- append(Ma2019_CSCORE_padj,list(p_matrix_BH))
+}
+
+names(Ma2019_CSCORE_cor)              <- celltype_interest
+names(Ma2019_CSCORE_padj)             <- celltype_interest
+saveRDS(Ma2019_CSCORE_cor,file = "Pro_CoExpression/output/data/3CA/Liver/Ma2019_Liver/Ma2019_CSCORE_cor.rds")
+saveRDS(Ma2019_CSCORE_padj,file = "Pro_CoExpression/output/data/3CA/Liver/Ma2019_Liver/Ma2019_CSCORE_padj.rds")
+
+#####2.2 Sharma2020 dataset####
+library(Seurat)
+library(readr)
+library(Matrix)
+library(CSCORE)
+Sharma2020_metadata                         <- read_csv("Pro_CoExpression/data/3CA/Liver_biliary/Data_Sharma2022_Liver/Meta-data.csv")
+Sharma2020_matrix                           <- readMM("Pro_CoExpression/data/3CA/Liver_biliary/Data_Sharma2022_Liver/Exp_data_UMIcounts.mtx")
+Cells                                       <- read_csv("Pro_CoExpression/data/3CA/Liver_biliary/Data_Sharma2022_Liver/Cells.csv")
+table(Cells$cell_type)
+table(Cells$cell_subtype)
+gene                                        <- read.delim("Pro_CoExpression/data/3CA/Liver_biliary/Data_Sharma2022_Liver/Genes.txt",sep = "\t",header = F)
+
+rownames(Sharma2020_matrix)             <- gene$V1
+colnames(Sharma2020_matrix)             <- Cells$cell_name
+Sharma2020_scRNA                        <- CreateSeuratObject(counts = Sharma2020_matrix)
+Sharma2020_scRNA$orig.ident             <- Cells$sample
+Sharma2020_scRNA$cell_type              <- Cells$cell_type
+Sharma2020_scRNA$source                 <- Cells$source
+saveRDS(Sharma2020_scRNA,file = "Pro_CoExpression/output/data/3CA/Liver/Sharma2020_Liver/Sharma2020_scRNA.rds")
+
+####*normal tissue ####
+Sharma2020_normal_scRNA                        <- subset(Sharma2020_scRNA,source=="normal")
+library(CSCORE)
+DefaultAssay(Sharma2020_normal_scRNA)          <- 'RNA'
+celltype_interest                              <- c("B_cell","T_cell","Fibroblast","Hepatocyte","Endothelial")
+Sharma2020_normal_CSCORE_cor                   <- list()
+Sharma2020_normal_CSCORE_padj                  <- list()
+for (i in 1:length(celltype_interest)) {
+  Sharma2020_celltype_scRNA           <- subset(Sharma2020_normal_scRNA,cell_type==celltype_interest[i])
+  gene_expression_prop                <- rowMeans(Sharma2020_celltype_scRNA@assays$RNA@counts > 0) #Calculate the expression ratio of each gene in cells
+  threshold                           <- 0.1  
+  genes_selected                      <- rownames(Sharma2020_celltype_scRNA@assays$RNA@counts)[gene_expression_prop > threshold]
+  CSCORE_result                       <- CSCORE(Sharma2020_celltype_scRNA, genes = genes_selected)
+  CSCORE_cor                          <- CSCORE_result$est
+  Sharma2020_normal_CSCORE_cor        <- append(Sharma2020_normal_CSCORE_cor,list(CSCORE_cor))
+  CSCORE_p                            <- CSCORE_result$p_value
+  p_matrix_BH = matrix(0, length(genes_selected), length(genes_selected))
+  p_matrix_BH[upper.tri(CSCORE_p)] = p.adjust(CSCORE_p[upper.tri(CSCORE_p)], method = "BH")
+  p_matrix_BH                         <- p_matrix_BH + t(p_matrix_BH)
+  Sharma2020_normal_CSCORE_padj       <- append(Sharma2020_normal_CSCORE_padj,list(p_matrix_BH))
+}
+
+names(Sharma2020_normal_CSCORE_cor)       <- celltype_interest
+names(Sharma2020_normal_CSCORE_padj)      <- celltype_interest
+saveRDS(Sharma2020_normal_CSCORE_cor,file = "Pro_CoExpression/output/data/3CA/Liver/Sharma2020_Liver/Sharma2020_normal_CSCORE_cor.rds")
+saveRDS(Sharma2020_normal_CSCORE_padj,file = "Pro_CoExpression/output/data/3CA/Liver/Sharma2020_Liver/Sharma2020_normal_CSCORE_padj.rds")
+
+
+####*tumor tissue ####
+Sharma2020_tumor_scRNA                         <- subset(Sharma2020_scRNA,source=="tumor")
+library(CSCORE)
+DefaultAssay(Sharma2020_tumor_scRNA)           <- 'RNA'
+celltype_interest                              <- c("B_cell","T_cell","Fibroblast","Hepatocyte","Endothelial")
+Sharma2020_tumor_CSCORE_cor                    <- list()
+Sharma2020_tumor_CSCORE_padj                   <- list()
+for (i in 1:length(celltype_interest)) {
+  Sharma2020_celltype_scRNA           <- subset(Sharma2020_tumor_scRNA,cell_type==celltype_interest[i])
+  gene_expression_prop                <- rowMeans(Sharma2020_celltype_scRNA@assays$RNA@counts > 0) #Calculate the expression ratio of each gene in cells
+  threshold                           <- 0.1  
+  genes_selected                      <- rownames(Sharma2020_celltype_scRNA@assays$RNA@counts)[gene_expression_prop > threshold]
+  CSCORE_result                       <- CSCORE(Sharma2020_celltype_scRNA, genes = genes_selected)
+  CSCORE_cor                          <- CSCORE_result$est
+  Sharma2020_tumor_CSCORE_cor         <- append(Sharma2020_tumor_CSCORE_cor,list(CSCORE_cor))
+  CSCORE_p                            <- CSCORE_result$p_value
+  p_matrix_BH = matrix(0, length(genes_selected), length(genes_selected))
+  p_matrix_BH[upper.tri(CSCORE_p)] = p.adjust(CSCORE_p[upper.tri(CSCORE_p)], method = "BH")
+  p_matrix_BH                         <- p_matrix_BH + t(p_matrix_BH)
+  Sharma2020_tumor_CSCORE_padj        <- append(Sharma2020_tumor_CSCORE_padj,list(p_matrix_BH))
+}
+
+names(Sharma2020_tumor_CSCORE_cor)       <- celltype_interest
+names(Sharma2020_tumor_CSCORE_padj)      <- celltype_interest
+saveRDS(Sharma2020_tumor_CSCORE_cor,file = "Pro_CoExpression/output/data/3CA/Liver/Sharma2020_Liver/Sharma2020_tumor_CSCORE_cor.rds")
+saveRDS(Sharma2020_tumor_CSCORE_padj,file = "Pro_CoExpression/output/data/3CA/Liver/Sharma2020_Liver/Sharma2020_tumor_CSCORE_padj.rds")
+
+
+#####2.3 Zhang2019 dataset####
+library(Seurat)
+library(readr)
+library(Matrix)
+library(CSCORE)
+Zhang2019_metadata                          <- read_csv("Pro_CoExpression/data/3CA/Liver_biliary/Data_Zhang2019_Liver/Meta-data.csv")
+Zhang2019_matrix                            <- readMM("Pro_CoExpression/data/3CA/Liver_biliary/Data_Zhang2019_Liver/10X/Exp_data_UMIcounts_10X.mtx")
+Cells                                       <- read_csv("Pro_CoExpression/data/3CA/Liver_biliary/Data_Zhang2019_Liver/10X/Cells_10X.csv")
+table(Cells$cell_type)
+table(Cells$source)
+gene                                   <- read.delim("Pro_CoExpression/data/3CA/Liver_biliary/Data_Zhang2019_Liver/10X/Genes_10X.txt",sep = "\t",header = F)
+
+rownames(Zhang2019_matrix)             <- gene$V1
+colnames(Zhang2019_matrix)             <- Cells$cell_name
+Zhang2019_scRNA                        <- CreateSeuratObject(counts = Zhang2019_matrix)
+Zhang2019_scRNA$orig.ident             <- Cells$sample
+Zhang2019_scRNA$cell_type              <- Cells$cell_type
+Zhang2019_scRNA$source                 <- Cells$source
+
+
+####*normal tissue ####
+Zhang2019_normal_scRNA                        <- subset(Zhang2019_scRNA,source=="Normal")
+library(CSCORE)
+DefaultAssay(Zhang2019_normal_scRNA)          <- 'RNA'
+celltype_interest                             <- c("B_cell","T_cell","Macrophage")
+Zhang2019_normal_CSCORE_cor                   <- list()
+Zhang2019_normal_CSCORE_padj                  <- list()
+for (i in 1:length(celltype_interest)) {
+  Zhang2019_celltype_scRNA            <- subset(Zhang2019_normal_scRNA,cell_type==celltype_interest[i])
+  gene_expression_prop                <- rowMeans(Zhang2019_celltype_scRNA@assays$RNA@counts > 0) #Calculate the expression ratio of each gene in cells
+  threshold                           <- 0.1  
+  genes_selected                      <- rownames(Zhang2019_celltype_scRNA@assays$RNA@counts)[gene_expression_prop > threshold]
+  CSCORE_result                       <- CSCORE(Zhang2019_celltype_scRNA, genes = genes_selected)
+  CSCORE_cor                          <- CSCORE_result$est
+  Zhang2019_normal_CSCORE_cor         <- append(Zhang2019_normal_CSCORE_cor,list(CSCORE_cor))
+  CSCORE_p                            <- CSCORE_result$p_value
+  p_matrix_BH = matrix(0, length(genes_selected), length(genes_selected))
+  p_matrix_BH[upper.tri(CSCORE_p)] = p.adjust(CSCORE_p[upper.tri(CSCORE_p)], method = "BH")
+  p_matrix_BH                         <- p_matrix_BH + t(p_matrix_BH)
+  Zhang2019_normal_CSCORE_padj        <- append(Zhang2019_normal_CSCORE_padj,list(p_matrix_BH))
+}
+
+names(Zhang2019_normal_CSCORE_cor)       <- celltype_interest
+names(Zhang2019_normal_CSCORE_padj)      <- celltype_interest
+saveRDS(Zhang2019_normal_CSCORE_cor,file = "Pro_CoExpression/output/data/3CA/Liver/Zhang2019_Liver/Zhang2019_normal_CSCORE_cor.rds")
+saveRDS(Zhang2019_normal_CSCORE_padj,file = "Pro_CoExpression/output/data/3CA/Liver/Zhang2019_Liver/Zhang2019_normal_CSCORE_padj.rds")
+
+####*tumor tissue ####
+Zhang2019_tumor_scRNA                         <- subset(Zhang2019_scRNA,source=="Tumor")
+library(CSCORE)
+DefaultAssay(Zhang2019_tumor_scRNA)           <- 'RNA'
+celltype_interest                             <- c("B_cell","T_cell","Macrophage")
+Zhang2019_tumor_CSCORE_cor                    <- list()
+Zhang2019_tumor_CSCORE_padj                   <- list()
+for (i in 1:length(celltype_interest)) {
+  Zhang2019_celltype_scRNA            <- subset(Zhang2019_tumor_scRNA,cell_type==celltype_interest[i])
+  gene_expression_prop                <- rowMeans(Zhang2019_celltype_scRNA@assays$RNA@counts > 0) #Calculate the expression ratio of each gene in cells
+  threshold                           <- 0.1  
+  genes_selected                      <- rownames(Zhang2019_celltype_scRNA@assays$RNA@counts)[gene_expression_prop > threshold]
+  CSCORE_result                       <- CSCORE(Zhang2019_celltype_scRNA, genes = genes_selected)
+  CSCORE_cor                          <- CSCORE_result$est
+  Zhang2019_tumor_CSCORE_cor          <- append(Zhang2019_tumor_CSCORE_cor,list(CSCORE_cor))
+  CSCORE_p                            <- CSCORE_result$p_value
+  p_matrix_BH = matrix(0, length(genes_selected), length(genes_selected))
+  p_matrix_BH[upper.tri(CSCORE_p)] = p.adjust(CSCORE_p[upper.tri(CSCORE_p)], method = "BH")
+  p_matrix_BH                         <- p_matrix_BH + t(p_matrix_BH)
+  Zhang2019_tumor_CSCORE_padj         <- append(Zhang2019_tumor_CSCORE_padj,list(p_matrix_BH))
+}
+
+names(Zhang2019_tumor_CSCORE_cor)       <- celltype_interest
+names(Zhang2019_tumor_CSCORE_padj)      <- celltype_interest
+saveRDS(Zhang2019_tumor_CSCORE_cor,file = "Pro_CoExpression/output/data/3CA/Liver/Zhang2019_Liver/Zhang2019_tumor_CSCORE_cor.rds")
+saveRDS(Zhang2019_tumor_CSCORE_padj,file = "Pro_CoExpression/output/data/3CA/Liver/Zhang2019_Liver/Zhang2019_tumor_CSCORE_padj.rds")
+
+
+#####2.4 Zhang2017(all are T-cells)####
+library(Seurat)
+library(readr)
+library(Matrix)
+library(CSCORE)
+Zhang2017_metadata                          <- read_csv("Pro_CoExpression/data/3CA/Liver_biliary/Data_Zhang2017_Liver/Meta-data.csv")
+Zhang2017_matrix                            <- readMM("Pro_CoExpression/data/3CA/Liver_biliary/Data_Zhang2017_Liver/Exp_data_UMIcounts.mtx")
+Cells                                       <- read_csv("Pro_CoExpression/data/3CA/Liver_biliary/Data_Zhang2017_Liver/Cells.csv")
+table(Cells$cell_type)
+table(Cells$source)
+gene                                        <- read.delim("Pro_CoExpression/data/3CA/Liver_biliary/Data_Zhang2017_Liver/Genes.txt",sep = "\t",header = F)
+
+rownames(Zhang2017_matrix)             <- gene$V1
+colnames(Zhang2017_matrix)             <- Cells$cell_name
+Zhang2017_scRNA                        <- CreateSeuratObject(counts = Zhang2017_matrix)
+Zhang2017_scRNA$orig.ident             <- Cells$sample
+Zhang2017_scRNA$cell_type              <- Cells$cell_type
+Zhang2017_scRNA$source                 <- Cells$source
+ 
+####*normal tissue ####
+Zhang2017_normal_scRNA                        <- subset(Zhang2017_scRNA,source=="NAT")
+library(CSCORE)
+DefaultAssay(Zhang2017_normal_scRNA)          <- 'RNA'
+celltype_interest                             <- c("T_cell")
+Zhang2017_normal_CSCORE_cor                   <- list()
+Zhang2017_normal_CSCORE_padj                  <- list()
+for (i in 1:length(celltype_interest)) {
+  Zhang2017_celltype_scRNA            <- subset(Zhang2017_normal_scRNA,cell_type==celltype_interest[i])
+  gene_expression_prop                <- rowMeans(Zhang2017_celltype_scRNA@assays$RNA@counts > 0) #Calculate the expression ratio of each gene in cells
+  threshold                           <- 0.1  
+  genes_selected                      <- rownames(Zhang2017_celltype_scRNA@assays$RNA@counts)[gene_expression_prop > threshold]
+  CSCORE_result                       <- CSCORE(Zhang2017_celltype_scRNA, genes = genes_selected)
+  CSCORE_cor                          <- CSCORE_result$est
+  Zhang2017_normal_CSCORE_cor         <- append(Zhang2017_normal_CSCORE_cor,list(CSCORE_cor))
+  CSCORE_p                            <- CSCORE_result$p_value
+  p_matrix_BH = matrix(0, length(genes_selected), length(genes_selected))
+  p_matrix_BH[upper.tri(CSCORE_p)] = p.adjust(CSCORE_p[upper.tri(CSCORE_p)], method = "BH")
+  p_matrix_BH                         <- p_matrix_BH + t(p_matrix_BH)
+  Zhang2017_normal_CSCORE_padj        <- append(Zhang2017_normal_CSCORE_padj,list(p_matrix_BH))
+}
+
+names(Zhang2017_normal_CSCORE_cor)       <- celltype_interest
+names(Zhang2017_normal_CSCORE_padj)      <- celltype_interest
+saveRDS(Zhang2017_normal_CSCORE_cor,file = "Pro_CoExpression/output/data/3CA/Liver/Zhang2017_Liver/Zhang2017_normal_CSCORE_cor.rds")
+saveRDS(Zhang2017_normal_CSCORE_padj,file = "Pro_CoExpression/output/data/3CA/Liver/Zhang2017_Liver/Zhang2017_normal_CSCORE_padj.rds")
+
+
+####*tumor tissue ####
+Zhang2017_tumor_scRNA                         <- subset(Zhang2017_scRNA,source=="Tumor")
+library(CSCORE)
+DefaultAssay(Zhang2017_tumor_scRNA)           <- 'RNA'
+celltype_interest                             <- c("T_cell")
+Zhang2017_tumor_CSCORE_cor                    <- list()
+Zhang2017_tumor_CSCORE_padj                   <- list()
+for (i in 1:length(celltype_interest)) {
+  Zhang2017_celltype_scRNA            <- subset(Zhang2017_tumor_scRNA,cell_type==celltype_interest[i])
+  gene_expression_prop                <- rowMeans(Zhang2017_celltype_scRNA@assays$RNA@counts > 0) #Calculate the expression ratio of each gene in cells
+  threshold                           <- 0.1  
+  genes_selected                      <- rownames(Zhang2017_celltype_scRNA@assays$RNA@counts)[gene_expression_prop > threshold]
+  CSCORE_result                       <- CSCORE(Zhang2017_celltype_scRNA, genes = genes_selected)
+  CSCORE_cor                          <- CSCORE_result$est
+  Zhang2017_tumor_CSCORE_cor          <- append(Zhang2017_tumor_CSCORE_cor,list(CSCORE_cor))
+  CSCORE_p                            <- CSCORE_result$p_value
+  p_matrix_BH = matrix(0, length(genes_selected), length(genes_selected))
+  p_matrix_BH[upper.tri(CSCORE_p)] = p.adjust(CSCORE_p[upper.tri(CSCORE_p)], method = "BH")
+  p_matrix_BH                         <- p_matrix_BH + t(p_matrix_BH)
+  Zhang2017_tumor_CSCORE_padj         <- append(Zhang2017_tumor_CSCORE_padj,list(p_matrix_BH))
+}
+
+names(Zhang2017_tumor_CSCORE_cor)       <- celltype_interest
+names(Zhang2017_tumor_CSCORE_padj)      <- celltype_interest
+saveRDS(Zhang2017_tumor_CSCORE_cor,file = "Pro_CoExpression/output/data/3CA/Liver/Zhang2017_Liver/Zhang2017_tumor_CSCORE_cor.rds")
+saveRDS(Zhang2017_tumor_CSCORE_padj,file = "Pro_CoExpression/output/data/3CA/Liver/Zhang2017_Liver/Zhang2017_tumor_CSCORE_padj.rds")
+
+
+####create a metadata for liver samples ####
+Ma2019_meta_data             <- subset(Ma2019_metadata,cancer_type=="HCC")
+Ma2019_meta_data             <- Ma2019_meta_data[,2,drop=F]  %>% mutate(sample_primary_met=rep("primary",4),site=rep("liver",4),dataset = rep("Ma2019_Liver",4))
+Sharma2020_meta_data         <- Sharma2020_metadata[,c(1,6)]  %>% mutate(sample_primary_met=rep("primary",58),dataset = rep("Sharma2020_Liver",58))
+Sharma2020_meta_data         <- Sharma2020_meta_data[,c(1,3,2,4)]
+colnames(Sharma2020_meta_data)[3]      <-"site"
+Zhang2019_meta_data          <- subset(Zhang2019_metadata,technology=="10x"&cancer_type=="Hepatocellular Carcinoma")
+Zhang2019_meta_data          <- Zhang2019_meta_data[,c(1,6),drop=F]
+Zhang2019_meta_data          <- arrange(Zhang2019_meta_data,source)%>% mutate(sample_primary_met=c(rep("normal",11),rep("primary",7)),dataset = rep("Zhang2019_Liver",18))
+Zhang2019_meta_data          <- Zhang2019_meta_data[,c(1,3,2,4)]
+colnames(Zhang2019_meta_data)[3]       <- "site"
+Zhang2019_meta_data           <- subset(Zhang2019_meta_data,site=="Normal"|site=="Tumor")
+Zhang2017_meta_data           <- Zhang2017_metadata[,1,drop=F]  %>% mutate(sample_primary_met=rep("primary",6),site=rep("liver",6),dataset = rep("Zhang2017_Liver",6))
+Liver_metadata                <- bind_rows(Ma2019_meta_data,Sharma2020_meta_data,Zhang2019_meta_data,Zhang2017_meta_data)
+write.csv(Liver_metadata,file = "Pro_CoExpression/output/data/3CA/Liver/Liver_metadata.csv")
+
+#####################
+####3 Ovarian ####
+####################
+
+#####3.1 Geistliner2020 dataset####
+Geistliner2020_metadata                     <- read_csv("Pro_CoExpression/data/3CA/Ovarian/Data_Geistliner2020_Ovarian/Meta-data.csv")
+Geistliner2020_matrix                       <- readMM("Pro_CoExpression/data/3CA/Ovarian/Data_Geistliner2020_Ovarian/Exp_data_UMIcounts.mtx")
+Cells                                       <- read_csv("Pro_CoExpression/data/3CA/Ovarian/Data_Geistliner2020_Ovarian/Cells.csv")
+table(Cells$cell_type)
+table(Cells$sample)
+gene                                        <- read.delim("Pro_CoExpression/data/3CA/Ovarian/Data_Geistliner2020_Ovarian/Genes.txt",sep = "\t",header = F)
+rownames(Geistliner2020_matrix)             <- gene$V1
+colnames(Geistliner2020_matrix)             <- Cells$cell_name
+Geistliner2020_scRNA                        <- CreateSeuratObject(counts = Geistliner2020_matrix)
+Geistliner2020_scRNA$orig.ident             <- Cells$sample
+Geistliner2020_scRNA$cell_type              <- Cells$cell_type
+library(CSCORE)
+DefaultAssay(Geistliner2020_scRNA)          <- 'RNA'
+celltype_interest                           <- c("B_cell","T_cell","Fibroblast","Malignant","Endothelial","Macrophage")
+Geistliner2020_CSCORE_cor                   <- list()
+Geistliner2020_CSCORE_padj                  <- list()
+for (i in 1:length(celltype_interest)) {
+  Geistliner2020_celltype_scRNA             <- subset(Geistliner2020_scRNA,cell_type==celltype_interest[i])
+  gene_expression_prop                <- rowMeans(Geistliner2020_celltype_scRNA@assays$RNA@counts > 0) #Calculate the expression ratio of each gene in cells
+  threshold                           <- 0.1  
+  genes_selected                      <- rownames(Geistliner2020_celltype_scRNA@assays$RNA@counts)[gene_expression_prop > threshold]
+  CSCORE_result                       <- CSCORE(Geistliner2020_celltype_scRNA, genes = genes_selected)
+  CSCORE_cor                          <- CSCORE_result$est
+  Geistliner2020_CSCORE_cor                 <- append(Geistliner2020_CSCORE_cor,list(CSCORE_cor))
+  CSCORE_p                            <- CSCORE_result$p_value
+  p_matrix_BH = matrix(0, length(genes_selected), length(genes_selected))
+  p_matrix_BH[upper.tri(CSCORE_p)] = p.adjust(CSCORE_p[upper.tri(CSCORE_p)], method = "BH")
+  p_matrix_BH                         <- p_matrix_BH + t(p_matrix_BH)
+  Geistliner2020_CSCORE_padj                <- append(Geistliner2020_CSCORE_padj,list(p_matrix_BH))
+}
+
+names(Geistliner2020_CSCORE_cor)       <- celltype_interest
+names(Geistliner2020_CSCORE_padj)      <- celltype_interest
+saveRDS(Geistliner2020_CSCORE_cor,file = "Pro_CoExpression/output/data/3CA/Ovarian/Geistliner2020_Ovarian/Geistliner2020_CSCORE_cor.rds")
+saveRDS(Geistliner2020_CSCORE_padj,file = "Pro_CoExpression/output/data/3CA/Ovarian/Geistliner2020_Ovarian/Geistliner2020_CSCORE_padj.rds")
+
+
+#####3.2 Olbrecht2021(primary, metastatic)####
+Olbrecht2021_metadata                       <- read_csv("Pro_CoExpression/data/3CA/Ovarian/Data_Olbrecht2021_Ovarian/Meta-data.csv")
+Olbrecht2021_matrix                         <- readMM("Pro_CoExpression/data/3CA/Ovarian/Data_Olbrecht2021_Ovarian/Exp_data_UMIcounts.mtx")
+Cells                                       <- read_csv("Pro_CoExpression/data/3CA/Ovarian/Data_Olbrecht2021_Ovarian/Cells.csv")
+table(Cells$cell_type)
+table(Cells$sample_site)
+gene                                        <- read.delim("Pro_CoExpression/data/3CA/Ovarian/Data_Olbrecht2021_Ovarian/Genes.txt",sep = "\t",header = F)
+
+rownames(Olbrecht2021_matrix)             <- gene$V1
+colnames(Olbrecht2021_matrix)             <- Cells$cell_name
+Olbrecht2021_scRNA                        <- CreateSeuratObject(counts = Olbrecht2021_matrix)
+Olbrecht2021_scRNA$orig.ident             <- Cells$sample
+Olbrecht2021_scRNA$cell_type              <- Cells$cell_type
+Olbrecht2021_scRNA$source                 <- Cells$source
+Olbrecht2021_scRNA$sample_site            <- Cells$sample_site
+saveRDS(Olbrecht2021_scRNA,file = "Pro_CoExpression/output/data/3CA/Ovarian/Olbrecht2021_Ovarian/Olbrecht2021_scRNA.rds")
+
+####*ovary tumor####
+Olbrecht2021_ovary_tumor_scRNA                       <- subset(Olbrecht2021_scRNA,source=="tumor"&sample_site=="ovary")
+library(CSCORE)
+DefaultAssay(Olbrecht2021_ovary_tumor_scRNA)          <- 'RNA'
+celltype_interest                                     <- c("T_cell","Fibroblast","Malignant","Macrophage")
+Olbrecht2021_ovary_tumor_CSCORE_cor                   <- list()
+Olbrecht2021_ovary_tumor_CSCORE_padj                  <- list()
+for (i in 1:length(celltype_interest)) {
+  Olbrecht2021_ovary_tumor_celltype_scRNA             <- subset(Olbrecht2021_ovary_tumor_scRNA,cell_type==celltype_interest[i])
+  gene_expression_prop                    <- rowMeans(Olbrecht2021_ovary_tumor_celltype_scRNA@assays$RNA@counts > 0) #Calculate the expression ratio of each gene in cells
+  threshold                               <- 0.1  
+  genes_selected                          <- rownames(Olbrecht2021_ovary_tumor_celltype_scRNA@assays$RNA@counts)[gene_expression_prop > threshold]
+  CSCORE_result                           <- CSCORE(Olbrecht2021_ovary_tumor_celltype_scRNA, genes = genes_selected)
+  CSCORE_cor                              <- CSCORE_result$est
+  Olbrecht2021_ovary_tumor_CSCORE_cor   <- append(Olbrecht2021_ovary_tumor_CSCORE_cor,list(CSCORE_cor))
+  CSCORE_p                                <- CSCORE_result$p_value
+  p_matrix_BH = matrix(0, length(genes_selected), length(genes_selected))
+  p_matrix_BH[upper.tri(CSCORE_p)] = p.adjust(CSCORE_p[upper.tri(CSCORE_p)], method = "BH")
+  p_matrix_BH                             <- p_matrix_BH + t(p_matrix_BH)
+  Olbrecht2021_ovary_tumor_CSCORE_padj                <- append(Olbrecht2021_ovary_tumor_CSCORE_padj,list(p_matrix_BH))
+}
+
+names(Olbrecht2021_ovary_tumor_CSCORE_cor)       <- celltype_interest
+names(Olbrecht2021_ovary_tumor_CSCORE_padj)      <- celltype_interest
+saveRDS(Olbrecht2021_ovary_tumor_CSCORE_cor,file = "Pro_CoExpression/output/data/3CA/Ovarian/Olbrecht2021_Ovarian/Olbrecht2021_ovary_tumor_CSCORE_cor.rds")
+saveRDS(Olbrecht2021_ovary_tumor_CSCORE_padj,file = "Pro_CoExpression/output/data/3CA/Ovarian/Olbrecht2021_Ovarian/Olbrecht2021_ovary_tumor_CSCORE_padj.rds")
+
+####*ovary normal####
+Olbrecht2021_ovary_normal_scRNA          <- subset(Olbrecht2021_scRNA,source=="normal"&sample_site=="ovary")
+library(CSCORE)
+DefaultAssay(Olbrecht2021_ovary_normal_scRNA)          <- 'RNA'
+celltype_interest                                      <- c("T_cell","Endothelial","Macrophage")
+Olbrecht2021_ovary_normal_CSCORE_cor                   <- list()
+Olbrecht2021_ovary_normal_CSCORE_padj                  <- list()
+for (i in 1:length(celltype_interest)) {
+  Olbrecht2021_ovary_normal_celltype_scRNA             <- subset(Olbrecht2021_ovary_normal_scRNA,cell_type==celltype_interest[i])
+  gene_expression_prop                    <- rowMeans(Olbrecht2021_ovary_normal_celltype_scRNA@assays$RNA@counts > 0) #Calculate the expression ratio of each gene in cells
+  threshold                               <- 0.1  
+  genes_selected                          <- rownames(Olbrecht2021_ovary_normal_celltype_scRNA@assays$RNA@counts)[gene_expression_prop > threshold]
+  CSCORE_result                           <- CSCORE(Olbrecht2021_ovary_normal_celltype_scRNA, genes = genes_selected)
+  CSCORE_cor                              <- CSCORE_result$est
+  Olbrecht2021_ovary_normal_CSCORE_cor   <- append(Olbrecht2021_ovary_normal_CSCORE_cor,list(CSCORE_cor))
+  CSCORE_p                                <- CSCORE_result$p_value
+  p_matrix_BH = matrix(0, length(genes_selected), length(genes_selected))
+  p_matrix_BH[upper.tri(CSCORE_p)] = p.adjust(CSCORE_p[upper.tri(CSCORE_p)], method = "BH")
+  p_matrix_BH                             <- p_matrix_BH + t(p_matrix_BH)
+  Olbrecht2021_ovary_normal_CSCORE_padj                <- append(Olbrecht2021_ovary_normal_CSCORE_padj,list(p_matrix_BH))
+}
+
+names(Olbrecht2021_ovary_normal_CSCORE_cor)       <- celltype_interest
+names(Olbrecht2021_ovary_normal_CSCORE_padj)      <- celltype_interest
+saveRDS(Olbrecht2021_ovary_normal_CSCORE_cor,file = "Pro_CoExpression/output/data/3CA/Ovarian/Olbrecht2021_Ovarian/Olbrecht2021_ovary_normal_CSCORE_cor.rds")
+saveRDS(Olbrecht2021_ovary_normal_CSCORE_padj,file = "Pro_CoExpression/output/data/3CA/Ovarian/Olbrecht2021_Ovarian/Olbrecht2021_ovary_normal_CSCORE_padj.rds")
+
+
+
+#####3.3 Qian2020 dataset####
+Qian2020_metadata                                    <- read_csv("/home/BioklabData/3CA/Data/Ovarian/Data_Qian2020_Ovarian/Meta-data.csv")
+Qian2020_matrix                             <- readMM("/home/BioklabData/3CA/Data/Ovarian/Data_Qian2020_Ovarian/Exp_data_UMIcounts.mtx")
+Cells                                       <- read_csv("/home/BioklabData/3CA/Data/Ovarian/Data_Qian2020_Ovarian/Cells.csv")
+table(Cells$cell_type)
+table(Cells$sample)
+gene                                        <- read.delim("/home/BioklabData/3CA/Data/Ovarian/Data_Qian2020_Ovarian/Genes.txt",sep = "\t",header = F)
+
+rownames(Qian2020_matrix)             <- gene$V1
+colnames(Qian2020_matrix)             <- Cells$cell_name
+Qian2020_scRNA                        <- CreateSeuratObject(counts = Qian2020_matrix)
+Qian2020_scRNA$orig.ident             <- Cells$sample
+Qian2020_scRNA$cell_type              <- Cells$cell_type
+
+library(CSCORE)
+DefaultAssay(Qian2020_scRNA)          <- 'RNA'
+celltype_interest                     <- c("B_cell","T_cell","Fibroblast","Malignant","Endothelial","Macrophage")
+Qian2020_CSCORE_cor                   <- list()
+Qian2020_CSCORE_padj                  <- list()
+for (i in 1:length(celltype_interest)) {
+  Qian2020_celltype_scRNA             <- subset(Qian2020_scRNA,cell_type==celltype_interest[i])
+  gene_expression_prop                <- rowMeans(Qian2020_celltype_scRNA@assays$RNA@counts > 0) #Calculate the expression ratio of each gene in cells
+  threshold                           <- 0.1  
+  genes_selected                      <- rownames(Qian2020_celltype_scRNA@assays$RNA@counts)[gene_expression_prop > threshold]
+  CSCORE_result                       <- CSCORE(Qian2020_celltype_scRNA, genes = genes_selected)
+  CSCORE_cor                          <- CSCORE_result$est
+  Qian2020_CSCORE_cor                 <- append(Qian2020_CSCORE_cor,list(CSCORE_cor))
+  CSCORE_p                            <- CSCORE_result$p_value
+  p_matrix_BH = matrix(0, length(genes_selected), length(genes_selected))
+  p_matrix_BH[upper.tri(CSCORE_p)] = p.adjust(CSCORE_p[upper.tri(CSCORE_p)], method = "BH")
+  p_matrix_BH                         <- p_matrix_BH + t(p_matrix_BH)
+  Qian2020_CSCORE_padj                <- append(Qian2020_CSCORE_padj,list(p_matrix_BH))
+}
+
+names(Qian2020_CSCORE_cor)       <- celltype_interest
+names(Qian2020_CSCORE_padj)      <- celltype_interest
+saveRDS(Qian2020_CSCORE_cor,file = "Pro_CoExpression/output/data/3CA/Ovarian/Qian2020_Ovarian/Qian2020_CSCORE_cor.rds")
+saveRDS(Qian2020_CSCORE_padj,file = "Pro_CoExpression/output/data/3CA/Ovarian/Qian2020_Ovarian/Qian2020_CSCORE_padj.rds")
+
+
+#####3.4 Regner2021 dataset####
+Regner2021_metadata                                    <- read_csv("Pro_CoExpression/data/3CA/Ovarian/Data_Regner2021_Ovarian/Meta-data.csv")
+Regner2021_matrix                           <- readMM("Pro_CoExpression/data/3CA/Ovarian/Data_Regner2021_Ovarian/Exp_data_UMIcounts.mtx")
+Cells                                       <- read_csv("Pro_CoExpression/data/3CA/Ovarian/Data_Regner2021_Ovarian/Cells.csv")
+table(Cells$cell_type)
+table(Cells$disease)
+gene                                        <- read.delim("Pro_CoExpression/data/3CA/Ovarian/Data_Regner2021_Ovarian/Genes.txt",sep = "\t",header = F)
+
+rownames(Regner2021_matrix)             <- gene$V1
+colnames(Regner2021_matrix)             <- Cells$cell_name
+Regner2021_scRNA                        <- CreateSeuratObject(counts = Regner2021_matrix)
+Regner2021_scRNA$orig.ident             <- Cells$sample
+Regner2021_scRNA$cell_type              <- Cells$cell_type
+Regner2021_scRNA$disease                <- Cells$disease
+Regner2021_ovca_scRNA                   <- subset(Regner2021_scRNA,disease=="Ovarian cancer")
+
+library(CSCORE)
+DefaultAssay(Regner2021_ovca_scRNA)          <- 'RNA'
+celltype_interest                           <- c("B_cell","T_cell","Fibroblast","Malignant","Endothelial","Macrophage")
+Regner2021_CSCORE_cor                   <- list()
+Regner2021_CSCORE_padj                  <- list()
+for (i in 1:length(celltype_interest)) {
+  Regner2021_celltype_scRNA             <- subset(Regner2021_ovca_scRNA,cell_type==celltype_interest[i])
+  gene_expression_prop                <- rowMeans(Regner2021_celltype_scRNA@assays$RNA@counts > 0) #Calculate the expression ratio of each gene in cells
+  threshold                           <- 0.1  
+  genes_selected                      <- rownames(Regner2021_celltype_scRNA@assays$RNA@counts)[gene_expression_prop > threshold]
+  CSCORE_result                       <- CSCORE(Regner2021_celltype_scRNA, genes = genes_selected)
+  CSCORE_cor                          <- CSCORE_result$est
+  Regner2021_CSCORE_cor                 <- append(Regner2021_CSCORE_cor,list(CSCORE_cor))
+  CSCORE_p                            <- CSCORE_result$p_value
+  p_matrix_BH = matrix(0, length(genes_selected), length(genes_selected))
+  p_matrix_BH[upper.tri(CSCORE_p)] = p.adjust(CSCORE_p[upper.tri(CSCORE_p)], method = "BH")
+  p_matrix_BH                         <- p_matrix_BH + t(p_matrix_BH)
+  Regner2021_CSCORE_padj                <- append(Regner2021_CSCORE_padj,list(p_matrix_BH))
+}
+
+names(Regner2021_CSCORE_cor)       <- celltype_interest
+names(Regner2021_CSCORE_padj)      <- celltype_interest
+saveRDS(Regner2021_CSCORE_cor,file = "Pro_CoExpression/output/data/3CA/Ovarian/Regner2021_Ovarian/Regner2021_CSCORE_cor.rds")
+saveRDS(Regner2021_CSCORE_padj,file = "Pro_CoExpression/output/data/3CA/Ovarian/Regner2021_Ovarian/Regner2021_CSCORE_padj.rds")
+
+
+#####3.5 Zhang2019 dataset####
+Zhang2019_metadata                          <- read_csv("Pro_CoExpression/data/3CA/Ovarian/Data_Zhang2019_Ovarian/Meta-data.csv")
+Zhang2019_matrix                            <- readMM("Pro_CoExpression/data/3CA/Ovarian/Data_Zhang2019_Ovarian/Exp_data_UMIcounts.mtx")
+Cells                                       <- read_csv("Pro_CoExpression/data/3CA/Ovarian/Data_Zhang2019_Ovarian/Cells.csv")
+table(Cells$cell_type)
+table(Cells$sample)
+gene                                        <- read.delim("Pro_CoExpression/data/3CA/Ovarian/Data_Zhang2019_Ovarian/Genes.txt",sep = "\t",header = F)
+
+rownames(Zhang2019_matrix)             <- gene$V1
+colnames(Zhang2019_matrix)             <- Cells$cell_name
+Zhang2019_scRNA                        <- CreateSeuratObject(counts = Zhang2019_matrix)
+Zhang2019_scRNA$orig.ident             <- Cells$sample
+Zhang2019_scRNA$cell_type              <- Cells$cell_type
+
+library(CSCORE)
+DefaultAssay(Zhang2019_scRNA)          <- 'RNA'
+celltype_interest                      <- c("B_cell","Fibroblast","Malignant","Endothelial","Macrophage")
+Zhang2019_CSCORE_cor                   <- list()
+Zhang2019_CSCORE_padj                  <- list()
+for (i in 1:length(celltype_interest)) {
+  Zhang2019_celltype_scRNA             <- subset(Zhang2019_scRNA,cell_type==celltype_interest[i])
+  gene_expression_prop                <- rowMeans(Zhang2019_celltype_scRNA@assays$RNA@counts > 0) #Calculate the expression ratio of each gene in cells
+  threshold                           <- 0.1  
+  genes_selected                      <- rownames(Zhang2019_celltype_scRNA@assays$RNA@counts)[gene_expression_prop > threshold]
+  CSCORE_result                       <- CSCORE(Zhang2019_celltype_scRNA, genes = genes_selected)
+  CSCORE_cor                          <- CSCORE_result$est
+  Zhang2019_CSCORE_cor                 <- append(Zhang2019_CSCORE_cor,list(CSCORE_cor))
+  CSCORE_p                            <- CSCORE_result$p_value
+  p_matrix_BH = matrix(0, length(genes_selected), length(genes_selected))
+  p_matrix_BH[upper.tri(CSCORE_p)] = p.adjust(CSCORE_p[upper.tri(CSCORE_p)], method = "BH")
+  p_matrix_BH                         <- p_matrix_BH + t(p_matrix_BH)
+  Zhang2019_CSCORE_padj                <- append(Zhang2019_CSCORE_padj,list(p_matrix_BH))
+}
+
+names(Zhang2019_CSCORE_cor)       <- celltype_interest
+names(Zhang2019_CSCORE_padj)      <- celltype_interest
+saveRDS(Zhang2019_CSCORE_cor,file = "Pro_CoExpression/output/data/3CA/Ovarian/Zhang2019_Ovarian/Zhang2019_CSCORE_cor.rds")
+saveRDS(Zhang2019_CSCORE_padj,file = "Pro_CoExpression/output/data/3CA/Ovarian/Zhang2019_Ovarian/Zhang2019_CSCORE_padj.rds")
+
+
+####create a metadata for ovarian cancer samples####
+Geistliner2020_meta_data          <- Geistliner2020_metadata[,1,drop=F]  %>% mutate(sample_primary_met=rep("primary",5),site=rep("Ovarian",5),dataset = rep("Geistliner2020_Ovarian",5))
+Nath2021_meta_data                <- subset(Nath2021_metadata,technology=="10x")
+Nath2021_meta_data                <- Nath2021_meta_data[,c(2,17,19)] %>% mutate(dataset = rep("Nath2021_Ovarian",16))
+Olbrecht2021_meta_data            <- Olbrecht2021_metadata[,1,drop=F]
+Olbrecht2021_meta_data$source     <- apply(Olbrecht2021_meta_data,1,function(x){strsplit(x[1],"_")[[1]][3]})
+Olbrecht2021_meta_data$site       <- apply(Olbrecht2021_meta_data,1,function(x){strsplit(x[1],"_")[[1]][2]})
+Olbrecht2021_meta_data$site       <- apply(Olbrecht2021_meta_data,1,function(x){paste(x[3],x[2],sep="_")})
+primary_met                       <- c(rep("met",4),"primary","met",rep("primary",2),rep("met",3))
+Olbrecht2021_meta_data            <- Olbrecht2021_meta_data %>%mutate(sample_primary_met=primary_met,dataset = rep("Olbrecht2021_Ovarian",11))
+Olbrecht2021_meta_data            <- Olbrecht2021_meta_data[,c(1,4,3,5)]
+Olbrecht2021_meta_data$sample     <- as.character(Olbrecht2021_meta_data$sample)
+Qian2020_meta_data                <- Qian2020_metadata[,2,drop=F]  %>% mutate(sample_primary_met=rep("primary",4),site=rep("Ovarian",4),dataset = rep("Qian2020_Ovarian",4))
+Qian2020_meta_data$sample         <- as.character(Qian2020_meta_data$sample)
+Regner2021_meta_data              <- subset(Regner2021_metadata,cancer_type=="Ovarian Cancer")  
+Regner2021_meta_data              <- Regner2021_meta_data[,1,drop=F]  %>% mutate(sample_primary_met=rep("primary",3),site=rep("Ovarian",3),dataset = rep("Regner2021_Ovarian",3))
+Regner2021_meta_data$sample       <- as.character(Regner2021_meta_data$sample)
+Zhang2019_meta_data               <- Zhang2019_metadata[,1]  %>%  mutate(sample_primary_met=rep("primary",2),site=c("Left ovary","Right ovary"),dataset = rep("Zhang2019_Ovarian",2))
+Zhang2022_meta_data               <- Zhang2022_metadata[,c(1,7)]  %>% mutate(sample_primary_met=c("primary",rep("met",21)),dataset = rep("Zhang2022_Ovarian",22))
+Zhang2022_meta_data               <- Zhang2022_meta_data[,c(1,3,2,4)]
+colnames(Zhang2022_meta_data)[3]  <- "site"
+Ovarian_metadata                  <- bind_rows(Geistliner2020_meta_data,Nath2021_meta_data,Olbrecht2021_meta_data,Qian2020_meta_data,Regner2021_meta_data,Regner2021_meta_data,Zhang2019_meta_data,Zhang2022_meta_data)
+write.csv(Ovarian_metadata,file = "Pro_CoExpression/output/data/3CA/Ovarian/Ovarian_metadata.csv")
+
+####################
+####4 Pancreas####
+####################
+####4.1 Lin2020 datasetprimary,and metastatic)####
+Lin2020_metadata                            <- read_csv("/home/BioklabData/3CA/Data/Pancreas/Data_Lin2020_Pancreas/Meta-data.csv")
+Lin2020_matrix                              <- readMM("/home/BioklabData/3CA/Data/Pancreas/Data_Lin2020_Pancreas/Exp_data_UMIcounts.mtx")
+Cells                                       <- read_csv("/home/BioklabData/3CA/Data/Pancreas/Data_Lin2020_Pancreas/Cells.csv")
+table(Cells$cell_type)
+table(Cells$sample)
+gene                                        <- read.delim("/home/BioklabData/3CA/Data/Pancreas/Data_Lin2020_Pancreas/Genes.txt",sep = "\t",header = F)
+
+rownames(Lin2020_matrix)             <- gene$V1
+colnames(Lin2020_matrix)             <- Cells$cell_name
+Lin2020_scRNA                        <- CreateSeuratObject(counts = Lin2020_matrix)
+Lin2020_scRNA$orig.ident             <- Cells$sample
+Lin2020_scRNA$cell_type              <- Cells$cell_type
+METliver_sample                      <- paste0("MET0",c(1:2,4:6))
+primary_sample                       <- paste0("P0",1:10)        
+####*primary (!!!!!In sqrt(t(seq_depth^4 * ele_inv_Sigma) %*% ele_inv_Sigma) :NaNs produced)####
+Lin2020_primary_scRNA                        <- subset(Lin2020_scRNA,orig.ident %in% primary_sample) 
+library(CSCORE)
+DefaultAssay(Lin2020_primary_scRNA)          <- 'RNA'
+celltype_interest                            <- c("Fibroblast","ETC","Endothelial","Macrophage")
+Lin2020_primary_CSCORE_cor                   <- list()
+Lin2020_primary_CSCORE_padj                  <- list()
+for (i in 1:length(celltype_interest)) {
+  Lin2020_celltype_scRNA             <- subset(Lin2020_primary_scRNA,cell_type==celltype_interest[i])
+  gene_expression_prop                <- rowMeans(Lin2020_celltype_scRNA@assays$RNA@counts > 0) #Calculate the expression ratio of each gene in cells
+  threshold                           <- 0.1  
+  genes_selected                      <- rownames(Lin2020_celltype_scRNA@assays$RNA@counts)[gene_expression_prop > threshold]
+  CSCORE_result                       <- CSCORE(Lin2020_celltype_scRNA, genes = genes_selected)
+  CSCORE_cor                          <- CSCORE_result$est
+  Lin2020_primary_CSCORE_cor          <- append(Lin2020_primary_CSCORE_cor,list(CSCORE_cor))
+  CSCORE_p                            <- CSCORE_result$p_value
+  p_matrix_BH = matrix(0, length(genes_selected), length(genes_selected))
+  p_matrix_BH[upper.tri(CSCORE_p)] = p.adjust(CSCORE_p[upper.tri(CSCORE_p)], method = "BH")
+  p_matrix_BH                         <- p_matrix_BH + t(p_matrix_BH)
+  Lin2020_primary_CSCORE_padj         <- append(Lin2020_primary_CSCORE_padj,list(p_matrix_BH))
+}
+
+names(Lin2020_primary_CSCORE_cor)       <- celltype_interest
+names(Lin2020_primary_CSCORE_padj)      <- celltype_interest
+saveRDS(Lin2020_primary_CSCORE_cor,file = "Pro_CoExpression/output/data/3CA/Pancreas/Lin2020_Pancreas/Lin2020_primary_CSCORE_cor.rds")
+saveRDS(Lin2020_primary_CSCORE_padj,file = "Pro_CoExpression/output/data/3CA/Pancreas/Lin2020_Pancreas/Lin2020_primary_CSCORE_padj.rds")
+
+
+####4.2 Hwang2022 dataset####
+Hwang2022_metadata                                      <- read_csv("Pro_CoExpression/data/3CA/Pancreas/Data_Hwang2022_Pancreas/Meta-data.csv")
+Hwang2022_group1_matrix                       <- readMM("Pro_CoExpression/data/3CA/Pancreas/Data_Hwang2022_Pancreas/Group1/Exp_data_TP10K_1.mtx")
+Cells_group1                                  <- read_csv("Pro_CoExpression/data/3CA/Pancreas/Data_Hwang2022_Pancreas/Group1/Cells1.csv")
+table(Cells_group1$cell_type)
+table(Cells_group1$Sample)
+Cells_group1$cell_id                          <- paste(Cells_group1$sample,Cells_group1$cell_name,sep = "_")
+gene                                          <- read.delim("Pro_CoExpression/data/3CA/Pancreas/Data_Hwang2022_Pancreas/genes.txt",sep = "\t",header = F)
+
+rownames(Hwang2022_group1_matrix)             <- gene$V1
+colnames(Hwang2022_group1_matrix)             <- Cells_group1$cell_id
+Hwang2022_group1_scRNA                        <- CreateSeuratObject(counts = Hwang2022_group1_matrix)
+Hwang2022_group1_scRNA$orig.ident             <- Cells_group1$sample
+Hwang2022_group1_scRNA$cell_type              <- Cells_group1$cell_type
+
+Hwang2022_group2_matrix                       <- readMM("Pro_CoExpression/data/3CA/Pancreas/Data_Hwang2022_Pancreas/Group2/Exp_data_TP10K_2.mtx")
+Cells_group2                                  <- read_csv("Pro_CoExpression/data/3CA/Pancreas/Data_Hwang2022_Pancreas/Group2/Cells2.csv")
+table(Cells_group2$cell_type)
+table(Cells_group2$sample)
+Cells_group2$cell_id                          <- paste(Cells_group2$sample,Cells_group2$cell_name,sep = "_")
+
+rownames(Hwang2022_group2_matrix)             <- gene$V1
+colnames(Hwang2022_group2_matrix)             <- Cells_group2$cell_id
+Hwang2022_group2_scRNA                        <- CreateSeuratObject(counts = Hwang2022_group2_matrix)
+Hwang2022_group2_scRNA$orig.ident             <- Cells_group2$sample
+Hwang2022_group2_scRNA$cell_type              <- Cells_group2$cell_type
+
+Hwang2022_group3_matrix                       <- readMM("Pro_CoExpression/data/3CA/Pancreas/Data_Hwang2022_Pancreas/Group3/Exp_data_TP10K_3.mtx")
+Cells_group3                                  <- read_csv("Pro_CoExpression/data/3CA/Pancreas/Data_Hwang2022_Pancreas/Group3/Cells3.csv")
+table(Cells_group3$cell_type)
+table(Cells_group3$sample)
+Cells_group3$cell_id                          <- paste(Cells_group3$sample,Cells_group3$cell_name,sep = "_")
+
+rownames(Hwang2022_group3_matrix)             <- gene$V1
+colnames(Hwang2022_group3_matrix)             <- Cells_group3$cell_id
+Hwang2022_group3_scRNA                        <- CreateSeuratObject(counts = Hwang2022_group3_matrix)
+Hwang2022_group3_scRNA$orig.ident             <- Cells_group3$sample
+Hwang2022_group3_scRNA$cell_type              <- Cells_group3$cell_type
+
+Hwang2022_scRNA                         <- merge(x=Hwang2022_group1_scRNA,y=c(Hwang2022_group2_scRNA,Hwang2022_group3_scRNA))
+table(Hwang2022_scRNA$cell_type)
+
+library(CSCORE)
+DefaultAssay(Hwang2022_scRNA)          <- 'RNA'
+celltype_interest                      <- c("B_cell","T_cell","Fibroblast","Malignant","Endothelial","Macrophage")
+Hwang2022_CSCORE_cor                   <- list()
+Hwang2022_CSCORE_padj                  <- list()
+for (i in 1:length(celltype_interest)) {
+  Hwang2022_celltype_scRNA             <- subset(Hwang2022_scRNA,cell_type==celltype_interest[i])
+  gene_expression_prop                 <- rowMeans(Hwang2022_celltype_scRNA@assays$RNA@counts > 0) #Calculate the expression ratio of each gene in cells
+  threshold                            <- 0.1  
+  genes_selected                       <- rownames(Hwang2022_celltype_scRNA@assays$RNA@counts)[gene_expression_prop > threshold]
+  CSCORE_result                        <- CSCORE(Hwang2022_celltype_scRNA, genes = genes_selected)
+  CSCORE_cor                           <- CSCORE_result$est
+  Hwang2022_CSCORE_cor                 <- append(Hwang2022_CSCORE_cor,list(CSCORE_cor))
+  CSCORE_p                             <- CSCORE_result$p_value
+  p_matrix_BH = matrix(0, length(genes_selected), length(genes_selected))
+  p_matrix_BH[upper.tri(CSCORE_p)] = p.adjust(CSCORE_p[upper.tri(CSCORE_p)], method = "BH")
+  p_matrix_BH                          <- p_matrix_BH + t(p_matrix_BH)
+  Hwang2022_CSCORE_padj                <- append(Hwang2022_CSCORE_padj,list(p_matrix_BH))
+}
+
+names(Hwang2022_CSCORE_cor)       <- celltype_interest
+names(Hwang2022_CSCORE_padj)      <- celltype_interest
+saveRDS(Hwang2022_CSCORE_cor,file = "Pro_CoExpression/output/data/3CA/Pancreas/Hwang2022_Pancreas/Hwang2022_CSCORE_cor.rds")
+saveRDS(Hwang2022_CSCORE_padj,file = "Pro_CoExpression/output/data/3CA/Pancreas/Hwang2022_Pancreas/Hwang2022_CSCORE_padj.rds")
+
+####4.3 Peng2019 dataset####
+Peng2019_metadata                                    <- read_csv("/home/BioklabData/3CA/Data/Pancreas/Data_Peng2019_Pancreas/Meta-data.csv")
+Peng2019_matrix                             <- readMM("/home/BioklabData/3CA/Data/Pancreas/Data_Peng2019_Pancreas/Exp_data_UMIcounts.mtx")
+Cells                                       <- read_csv("/home/BioklabData/3CA/Data/Pancreas/Data_Peng2019_Pancreas/Cells.csv")
+table(Cells$cell_type)
+table(Cells$sample)
+gene                                        <- read.delim("/home/BioklabData/3CA/Data/Pancreas/Data_Peng2019_Pancreas/Genes.txt",sep = "\t",header = F)
+
+rownames(Peng2019_matrix)             <- gene$V1
+colnames(Peng2019_matrix)             <- Cells$cell_name
+Peng2019_scRNA                        <- CreateSeuratObject(counts = Peng2019_matrix)
+Peng2019_scRNA$orig.ident             <- Cells$sample
+Peng2019_scRNA$cell_type              <- Cells$cell_type
+
+library(CSCORE)
+DefaultAssay(Peng2019_scRNA)          <- 'RNA'
+celltype_interest                     <- c("B_cell","T_cell","Fibroblast","Malignant","Endothelial","Macrophage")
+Peng2019_CSCORE_cor                   <- list()
+Peng2019_CSCORE_padj                  <- list()
+for (i in 1:length(celltype_interest)) {
+  Peng2019_celltype_scRNA              <- subset(Peng2019_scRNA,cell_type==celltype_interest[i])
+  gene_expression_prop                <- rowMeans(Peng2019_celltype_scRNA@assays$RNA@counts > 0) #Calculate the expression ratio of each gene in cells
+  threshold                           <- 0.1  
+  genes_selected                      <- rownames(Peng2019_celltype_scRNA@assays$RNA@counts)[gene_expression_prop > threshold]
+  CSCORE_result                       <- CSCORE(Peng2019_celltype_scRNA, genes = genes_selected)
+  CSCORE_cor                          <- CSCORE_result$est
+  Peng2019_CSCORE_cor                 <- append(Peng2019_CSCORE_cor,list(CSCORE_cor))
+  CSCORE_p                            <- CSCORE_result$p_value
+  p_matrix_BH = matrix(0, length(genes_selected), length(genes_selected))
+  p_matrix_BH[upper.tri(CSCORE_p)] = p.adjust(CSCORE_p[upper.tri(CSCORE_p)], method = "BH")
+  p_matrix_BH                         <- p_matrix_BH + t(p_matrix_BH)
+  Peng2019_CSCORE_padj                <- append(Peng2019_CSCORE_padj,list(p_matrix_BH))
+}
+
+names(Peng2019_CSCORE_cor)       <- celltype_interest
+names(Peng2019_CSCORE_padj)      <- celltype_interest
+saveRDS(Peng2019_CSCORE_cor,file = "Pro_CoExpression/output/data/3CA/Pancreas/Peng2019_Pancreas/Peng2019_CSCORE_cor.rds")
+saveRDS(Peng2019_CSCORE_padj,file = "Pro_CoExpression/output/data/3CA/Pancreas/Peng2019_Pancreas/Peng2019_CSCORE_padj.rds")
+
+####4.4 Steele2020 dataset####
+Steele2020_metadata                                    <- read_csv("/home/BioklabData/3CA/Data/Pancreas/Data_Steele2020_Pancreas/Meta-data.csv")
+Steele2020_matrix                              <- readMM("/home/BioklabData/3CA/Data/Pancreas/Data_Steele2020_Pancreas/Exp_data_UMIcounts.mtx")
+Cells                                       <- read_csv("/home/BioklabData/3CA/Data/Pancreas/Data_Steele2020_Pancreas/Cells.csv")
+table(Cells$cell_type)
+table(Cells$sample)
+gene                                        <- read.delim("/home/BioklabData/3CA/Data/Pancreas/Data_Steele2020_Pancreas/Genes.txt",sep = "\t",header = F)
+
+rownames(Steele2020_matrix)             <- gene$V1
+colnames(Steele2020_matrix)             <- Cells$cell_name
+Steele2020_scRNA                        <- CreateSeuratObject(counts = Steele2020_matrix)
+Steele2020_scRNA$orig.ident             <- Cells$sample
+Steele2020_scRNA$cell_type              <- Cells$cell_type
+
+
+library(CSCORE)
+DefaultAssay(Steele2020_scRNA)          <- 'RNA'
+celltype_interest                       <- c("B_cell","T_cell","Fibroblast","Malignant","Endothelial","Macrophage")
+Steele2020_CSCORE_cor                   <- list()
+Steele2020_CSCORE_padj                  <- list()
+for (i in 1:length(celltype_interest)) {
+  Peng2019_celltype_scRNA              <- subset(Steele2020_scRNA,cell_type==celltype_interest[i])
+  gene_expression_prop                <- rowMeans(Steele2020_celltype_scRNA@assays$RNA@counts > 0) #Calculate the expression ratio of each gene in cells
+  threshold                           <- 0.1  
+  genes_selected                      <- rownames(Steele2020_celltype_scRNA@assays$RNA@counts)[gene_expression_prop > threshold]
+  CSCORE_result                       <- CSCORE(Steele2020_celltype_scRNA, genes = genes_selected)
+  CSCORE_cor                          <- CSCORE_result$est
+  Steele2020_CSCORE_cor               <- append(Steele2020_CSCORE_cor,list(CSCORE_cor))
+  CSCORE_p                            <- CSCORE_result$p_value
+  p_matrix_BH = matrix(0, length(genes_selected), length(genes_selected))
+  p_matrix_BH[upper.tri(CSCORE_p)] = p.adjust(CSCORE_p[upper.tri(CSCORE_p)], method = "BH")
+  p_matrix_BH                         <- p_matrix_BH + t(p_matrix_BH)
+  Steele2020_CSCORE_padj              <- append(Steele2020_CSCORE_padj,list(p_matrix_BH))
+}
+
+names(Steele2020_CSCORE_cor)       <- celltype_interest
+names(Steele2020_CSCORE_padj)      <- celltype_interest
+saveRDS(Steele2020_CSCORE_cor,file = "Pro_CoExpression/output/data/3CA/Pancreas/Steele2020_Pancreas/Steele2020_CSCORE_cor.rds")
+saveRDS(Steele2020_CSCORE_padj,file = "Pro_CoExpression/output/data/3CA/Pancreas/Steele2020_Pancreas/Steele2020_CSCORE_padj.rds")
+
+####create a metadata data for pancreas cancer samples####
+Lin2020_meta_data                 <- Lin2020_metadata[,c(2,17,19)]  %>% mutate(dataset = rep("Lin2020_Pancreas",16))
+Hwang2022_meta_data               <- Hwang2022_metadata[,c(1,3)]  %>% mutate(dataset = rep("Hwang2022_Pancreas",43),sample_primary_met=rep("primary",43))
+Hwang2022_meta_data               <- Hwang2022_meta_data[,c(1,4,2:3)]
+colnames(Hwang2022_meta_data)[3]  <- "site"
+Peng2019_meta_data         <- Peng2019_metadata[,c(2,17,19)]  %>% mutate(dataset = rep("Peng2019_Pancreas",16))
+Steele2020_meta_data       <- Steele2020_metadata[,2,drop=F]  %>% mutate(sample_primary_met=rep("primary",16),site=rep("Pancreas",16),dataset = rep("Steele2020_Pancreas",16))
+Pancreas_meatdata          <- bind_rows(Lin2020_meta_data,Hwang2022_meta_data,Peng2019_meta_data,Steele2020_meta_data)
+write.csv(Pancreas_meatdata,"Pro_CoExpression/output/data/3CA/Pancreas/Pancreas_meatdata.csv")
+
+
+##################
+####5 Kidney####
+##################
+
+####5.1 Bi2021 dataset####
+Bi2021_metadata                             <- read_csv("/home/BioklabData/3CA/Data/Kidney/Data_Bi2021_Kidney/Meta-data.csv")
+Bi2021_matrix                               <- readMM("/home/BioklabData/3CA/Data/Kidney/Data_Bi2021_Kidney/Exp_data_UMIcounts_normalized.mtx")
+Cells                                       <- read_csv("/home/BioklabData/3CA/Data/Kidney/Data_Bi2021_Kidney/Cells.csv")
+table(Cells$cell_type)
+table(Cells$source)
+gene                                        <- read.delim("/home/BioklabData/3CA/Data/Kidney/Data_Bi2021_Kidney/Genes.txt",sep = "\t",header = F)
+
+rownames(Bi2021_matrix)             <- gene$V1
+colnames(Bi2021_matrix)             <- Cells$cell_name
+Bi2021_scRNA                        <- CreateSeuratObject(counts = Bi2021_matrix)
+Bi2021_scRNA$orig.ident             <- Cells$sample
+Bi2021_scRNA$cell_type              <- Cells$cell_type
+Bi2021_scRNA$source                 <- Cells$source
+
+####*kidney####
+Bi2021_kidney_scRNA               <- subset(Bi2021_scRNA,source=="kidney")
+table(Bi2021_kidney_scRNA$cell_type)
+library(CSCORE)
+DefaultAssay(Bi2021_kidney_scRNA)          <- 'RNA'
+celltype_interest                          <- c("B_cell","T_cell","Malignant","Endothelial","Macrophage")
+Bi2021_kidney_CSCORE_cor                   <- list()
+Bi2021_kidney_CSCORE_padj                  <- list()
+for (i in 1:length(celltype_interest)) {
+  Lin2020_celltype_scRNA              <- subset(Bi2021_kidney_scRNA,cell_type==celltype_interest[i])
+  gene_expression_prop                <- rowMeans(Lin2020_celltype_scRNA@assays$RNA@counts > 0) #Calculate the expression ratio of each gene in cells
+  threshold                           <- 0.1  
+  genes_selected                      <- rownames(Lin2020_celltype_scRNA@assays$RNA@counts)[gene_expression_prop > threshold]
+  CSCORE_result                       <- CSCORE(Lin2020_celltype_scRNA, genes = genes_selected)
+  CSCORE_cor                          <- CSCORE_result$est
+  Bi2021_kidney_CSCORE_cor               <- append(Bi2021_kidney_CSCORE_cor,list(CSCORE_cor))
+  CSCORE_p                            <- CSCORE_result$p_value
+  p_matrix_BH = matrix(0, length(genes_selected), length(genes_selected))
+  p_matrix_BH[upper.tri(CSCORE_p)] = p.adjust(CSCORE_p[upper.tri(CSCORE_p)], method = "BH")
+  p_matrix_BH                         <- p_matrix_BH + t(p_matrix_BH)
+  Bi2021_kidney_CSCORE_padj              <- append(Bi2021_kidney_CSCORE_padj,list(p_matrix_BH))
+}
+
+names(Bi2021_kidney_CSCORE_cor)       <- celltype_interest
+names(Bi2021_kidney_CSCORE_padj)      <- celltype_interest
+saveRDS(Bi2021_kidney_CSCORE_cor,file = "Pro_CoExpression/output/data/3CA/Kidney/Bi2021_Kidney/Bi2021_kidney_CSCORE_cor.rds")
+saveRDS(Bi2021_kidney_CSCORE_padj,file = "Pro_CoExpression/output/data/3CA/Kidney/Bi2021_Kidney/Bi2021_kidney_CSCORE_padj.rds")
+
+####5.2 Obradovic2021 dataset####
+Obradovic2021_metadata                      <- read_csv("/home/BioklabData/3CA/Data/Kidney/Data_Obradovic2021_Kidney/Meta-data.csv")
+Obradovic2021_matrix                        <- readMM("/home/BioklabData/3CA/Data/Kidney/Data_Obradovic2021_Kidney/Exp_data_UMIcounts.mtx")
+Cells                                       <- read_csv("/home/BioklabData/3CA/Data/Kidney/Data_Obradovic2021_Kidney/Cells.csv")
+table(Cells$cell_type)
+table(Cells$source)
+gene                                        <- read.delim("/home/BioklabData/3CA/Data/Kidney/Data_Obradovic2021_Kidney/Genes.txt",sep = "\t",header = F)
+
+rownames(Obradovic2021_matrix)             <- gene$V1
+colnames(Obradovic2021_matrix)             <- Cells$cell_name
+Obradovic2021_scRNA                        <- CreateSeuratObject(counts = Obradovic2021_matrix)
+Obradovic2021_scRNA$orig.ident             <- Cells$sample
+Obradovic2021_scRNA$cell_type              <- Cells$cell_type
+Obradovic2021_scRNA$source                 <- Cells$source
+
+####*tumor####
+Obradovic2021_tumor_scRNA                        <- subset(Obradovic2021_scRNA,source=="Tumor")
+table(Obradovic2021_tumor_scRNA$cell_type)
+library(CSCORE)
+DefaultAssay(Obradovic2021_tumor_scRNA)          <- 'RNA'
+celltype_interest                                <- c("Fibroblast","Malignant","Endothelial")
+Obradovic2021_tumor_CSCORE_cor                   <- list()
+Obradovic2021_tumor_CSCORE_padj                  <- list()
+for (i in 1:length(celltype_interest)) {
+  Obradovic2021_celltype_scRNA              <- subset(Obradovic2021_tumor_scRNA,cell_type==celltype_interest[i])
+  gene_expression_prop                <- rowMeans(Obradovic2021_celltype_scRNA@assays$RNA@counts > 0) #Calculate the expression ratio of each gene in cells
+  threshold                           <- 0.1  
+  genes_selected                      <- rownames(Obradovic2021_celltype_scRNA@assays$RNA@counts)[gene_expression_prop > threshold]
+  CSCORE_result                       <- CSCORE(Obradovic2021_celltype_scRNA, genes = genes_selected)
+  CSCORE_cor                          <- CSCORE_result$est
+  Obradovic2021_tumor_CSCORE_cor               <- append(Obradovic2021_tumor_CSCORE_cor,list(CSCORE_cor))
+  CSCORE_p                            <- CSCORE_result$p_value
+  p_matrix_BH = matrix(0, length(genes_selected), length(genes_selected))
+  p_matrix_BH[upper.tri(CSCORE_p)] = p.adjust(CSCORE_p[upper.tri(CSCORE_p)], method = "BH")
+  p_matrix_BH                         <- p_matrix_BH + t(p_matrix_BH)
+  Obradovic2021_tumor_CSCORE_padj              <- append(Obradovic2021_tumor_CSCORE_padj,list(p_matrix_BH))
+}
+
+names(Obradovic2021_tumor_CSCORE_cor)       <- celltype_interest
+names(Obradovic2021_tumor_CSCORE_padj)      <- celltype_interest
+saveRDS(Obradovic2021_tumor_CSCORE_cor,file = "Pro_CoExpression/output/data/3CA/Kidney/Obradovic2021_Kidney/Obradovic2021_tumor_CSCORE_cor.rds")
+saveRDS(Obradovic2021_tumor_CSCORE_padj,file = "Pro_CoExpression/output/data/3CA/Kidney/Obradovic2021_Kidney/Obradovic2021_tumor_CSCORE_padj.rds")
+
+
+####*normal(have many malignant cells)####
+Obradovic2021_normal_scRNA                        <- subset(Obradovic2021_scRNA,source=="Normal")
+table(Obradovic2021_normal_scRNA$cell_type)
+library(CSCORE)
+DefaultAssay(Obradovic2021_normal_scRNA)          <- 'RNA'
+celltype_interest                                 <- c("Fibroblast","Epithelial","Endothelial","Macrophage")
+Obradovic2021_normal_CSCORE_cor                   <- list()
+Obradovic2021_normal_CSCORE_padj                  <- list()
+for (i in 1:length(celltype_interest)) {
+  Obradovic2021_celltype_scRNA              <- subset(Obradovic2021_normal_scRNA,cell_type==celltype_interest[i])
+  gene_expression_prop                <- rowMeans(Obradovic2021_celltype_scRNA@assays$RNA@counts > 0) #Calculate the expression ratio of each gene in cells
+  threshold                           <- 0.1  
+  genes_selected                      <- rownames(Obradovic2021_celltype_scRNA@assays$RNA@counts)[gene_expression_prop > threshold]
+  CSCORE_result                       <- CSCORE(Obradovic2021_celltype_scRNA, genes = genes_selected)
+  CSCORE_cor                          <- CSCORE_result$est
+  Obradovic2021_normal_CSCORE_cor               <- append(Obradovic2021_normal_CSCORE_cor,list(CSCORE_cor))
+  CSCORE_p                                      <- CSCORE_result$p_value
+  p_matrix_BH = matrix(0, length(genes_selected), length(genes_selected))
+  p_matrix_BH[upper.tri(CSCORE_p)] = p.adjust(CSCORE_p[upper.tri(CSCORE_p)], method = "BH")
+  p_matrix_BH                                   <- p_matrix_BH + t(p_matrix_BH)
+  Obradovic2021_normal_CSCORE_padj              <- append(Obradovic2021_normal_CSCORE_padj,list(p_matrix_BH))
+}
+
+names(Obradovic2021_normal_CSCORE_cor)       <- celltype_interest
+names(Obradovic2021_normal_CSCORE_padj)      <- celltype_interest
+saveRDS(Obradovic2021_normal_CSCORE_cor,file = "Pro_CoExpression/output/data/3CA/Kidney/Obradovic2021_Kidney/Obradovic2021_normal_CSCORE_cor.rds")
+saveRDS(Obradovic2021_normal_CSCORE_padj,file = "Pro_CoExpression/output/data/3CA/Kidney/Obradovic2021_Kidney/Obradovic2021_normal_CSCORE_padj.rds")
+
+####5.3 Young2018 dataset####
+Young2018_metadata                            <- read_csv("/home/BioklabData/3CA/Data/Kidney/Data_Young2018_Kidney/Meta-data.csv")
+Young2018_matrix                              <- readMM("/home/BioklabData/3CA/Data/Kidney/Data_Young2018_Kidney/Exp_data_UMIcounts.mtx")
+Cells                                         <- read_csv("/home/BioklabData/3CA/Data/Kidney/Data_Young2018_Kidney/Cells.csv")
+table(Cells$cell_type)
+table(Cells$sample)
+Cells$patient                                 <- apply(Cells,1,function(x){strsplit(x[2],"_")[[1]][1]})
+Cells$source                                  <- apply(Cells,1,function(x){strsplit(x[2],"_")[[1]][3]})
+Cells$organ                                   <- apply(Cells,1,function(x){strsplit(x[2],"_")[[1]][2]})
+gene                                          <- read.delim("/home/BioklabData/3CA/Data/Kidney/Data_Young2018_Kidney/Genes.txt",sep = "\t",header = F)
+
+rownames(Young2018_matrix)             <- gene$V1
+colnames(Young2018_matrix)             <- Cells$cell_name
+Young2018_scRNA                        <- CreateSeuratObject(counts = Young2018_matrix)
+Young2018_scRNA$orig.ident             <- Cells$sample
+Young2018_scRNA$cell_type              <- Cells$cell_type
+Young2018_scRNA$patient                <- Cells$patient
+Young2018_scRNA$source                 <- Cells$source
+Young2018_scRNA$organ                  <- Cells$organ
+
+Young2018_kid_scRNA                        <- subset(Young2018_scRNA,organ=="Kid")
+####*tumor####
+Young2018_kid_T_scRNA                      <- subset(Young2018_kid_scRNA,source=="T")
+####*adults####
+adults_sample                                <- c(paste0("RCC",1:3),"pRCC","VHL")
+Young2018_kid_T_adults_RCC_scRNA           <- subset(Young2018_kid_T_scRNA,patient %in% adults_sample)
+table(Young2018_kid_T_adults_RCC_scRNA$cell_type)
+library(CSCORE)
+DefaultAssay(Young2018_kid_T_adults_RCC_scRNA)          <- 'RNA'
+celltype_interest                                        <- c("B_cell","T_cell","Malignant","Endothelial","Macrophage")
+Young2018_kid_T_adults_RCC_CSCORE_cor                   <- list()
+Young2018_kid_T_adults_RCC_CSCORE_padj                  <- list()
+for (i in 1:length(celltype_interest)) {
+  Obradovic2021_celltype_scRNA              <- subset(Young2018_kid_T_adults_RCC_scRNA,cell_type==celltype_interest[i])
+  gene_expression_prop                <- rowMeans(Obradovic2021_celltype_scRNA@assays$RNA@counts > 0) #Calculate the expression ratio of each gene in cells
+  threshold                           <- 0.1  
+  genes_selected                      <- rownames(Obradovic2021_celltype_scRNA@assays$RNA@counts)[gene_expression_prop > threshold]
+  CSCORE_result                       <- CSCORE(Obradovic2021_celltype_scRNA, genes = genes_selected)
+  CSCORE_cor                          <- CSCORE_result$est
+  Young2018_kid_T_adults_RCC_CSCORE_cor               <- append(Young2018_kid_T_adults_RCC_CSCORE_cor,list(CSCORE_cor))
+  CSCORE_p                            <- CSCORE_result$p_value
+  p_matrix_BH = matrix(0, length(genes_selected), length(genes_selected))
+  p_matrix_BH[upper.tri(CSCORE_p)] = p.adjust(CSCORE_p[upper.tri(CSCORE_p)], method = "BH")
+  p_matrix_BH                         <- p_matrix_BH + t(p_matrix_BH)
+  Young2018_kid_T_adults_RCC_CSCORE_padj              <- append(Young2018_kid_T_adults_RCC_CSCORE_padj,list(p_matrix_BH))
+}
+
+names(Young2018_kid_T_adults_RCC_CSCORE_cor)       <- celltype_interest
+names(Young2018_kid_T_adults_RCC_CSCORE_padj)      <- celltype_interest
+saveRDS(Young2018_kid_T_adults_RCC_CSCORE_cor,file = "Pro_CoExpression/output/data/3CA/Kidney/Young2018_Kidney/Young2018_kid_T_adults_RCC_CSCORE_cor.rds")
+saveRDS(Young2018_kid_T_adults_RCC_CSCORE_padj,file = "Pro_CoExpression/output/data/3CA/Kidney/Young2018_Kidney/Young2018_kid_T_adults_RCC_CSCORE_padj.rds")
+####*normal####
+Young2018_kid_N_scRNA                       <- subset(Young2018_kid_scRNA,source=="N")
+table(Young2018_kid_N_scRNA$patient)
+child_sample                                <- paste0("Wilms",1:3)
+Foetus_sample                               <- paste0("F",16:17)
+adults_sample                               <- c(paste0("RCC",1:3),"pRCC","VHL")
+
+####** adults rcc#####
+Young2018_kid_N_adults_RCC_scRNA           <- subset(Young2018_kid_N_scRNA,patient %in% adults_sample)
+table(Young2018_kid_N_adults_RCC_scRNA$cell_type)
+library(CSCORE)
+DefaultAssay(Young2018_kid_N_adults_RCC_scRNA)          <- 'RNA'
+celltype_interest                                       <- c("B_cell","T_cell","Epithelial","Endothelial","Macrophage")
+Young2018_kid_N_adults_RCC_CSCORE_cor                   <- list()
+Young2018_kid_N_adults_RCC_CSCORE_padj                  <- list()
+for (i in 1:length(celltype_interest)) {
+  Obradovic2021_celltype_scRNA              <- subset(Young2018_kid_N_adults_RCC_scRNA,cell_type==celltype_interest[i])
+  gene_expression_prop                <- rowMeans(Obradovic2021_celltype_scRNA@assays$RNA@counts > 0) #Calculate the expression ratio of each gene in cells
+  threshold                           <- 0.1  
+  genes_selected                      <- rownames(Obradovic2021_celltype_scRNA@assays$RNA@counts)[gene_expression_prop > threshold]
+  CSCORE_result                       <- CSCORE(Obradovic2021_celltype_scRNA, genes = genes_selected)
+  CSCORE_cor                          <- CSCORE_result$est
+  Young2018_kid_N_adults_RCC_CSCORE_cor               <- append(Young2018_kid_N_adults_RCC_CSCORE_cor,list(CSCORE_cor))
+  CSCORE_p                                            <- CSCORE_result$p_value
+  p_matrix_BH = matrix(0, length(genes_selected), length(genes_selected))
+  p_matrix_BH[upper.tri(CSCORE_p)] = p.adjust(CSCORE_p[upper.tri(CSCORE_p)], method = "BH")
+  p_matrix_BH                                         <- p_matrix_BH + t(p_matrix_BH)
+  Young2018_kid_N_adults_RCC_CSCORE_padj              <- append(Young2018_kid_N_adults_RCC_CSCORE_padj,list(p_matrix_BH))
+}
+
+names(Young2018_kid_N_adults_RCC_CSCORE_cor)       <- celltype_interest
+names(Young2018_kid_N_adults_RCC_CSCORE_padj)      <- celltype_interest
+saveRDS(Young2018_kid_N_adults_RCC_CSCORE_cor,file = "Pro_CoExpression/output/data/3CA/Kidney/Young2018_Kidney/Young2018_kid_N_adults_RCC_CSCORE_cor.rds")
+saveRDS(Young2018_kid_N_adults_RCC_CSCORE_padj,file = "Pro_CoExpression/output/data/3CA/Kidney/Young2018_Kidney/Young2018_kid_N_adults_RCC_CSCORE_padj.rds")
+
+
+####5.4 Zhang2021 dataset ####
+Zhang2021_metadata                            <- read_csv("/home/BioklabData/3CA/Data/Kidney/Data_Zhang2021_Kidney/Meta-data.csv")
+Zhang2021_matrix                              <- readMM("/home/BioklabData/3CA/Data/Kidney/Data_Zhang2021_Kidney/Exp_data_UMIcounts.mtx")
+Cells                                         <- read_csv("/home/BioklabData/3CA/Data/Kidney/Data_Zhang2021_Kidney/Cells.csv")
+table(Cells$cell_type)
+table(Cells$disease)
+gene                                          <- read.delim("/home/BioklabData/3CA/Data/Kidney/Data_Zhang2021_Kidney/Genes.txt",sep = "\t",header = F)
+
+rownames(Zhang2021_matrix)             <- gene$V1
+colnames(Zhang2021_matrix)             <- Cells$cell_name
+Zhang2021_scRNA                        <- CreateSeuratObject(counts = Zhang2021_matrix)
+Zhang2021_scRNA$orig.ident             <- Cells$sample
+Zhang2021_scRNA$cell_type              <- Cells$cell_type
+Zhang2021_scRNA$disease                <- Cells$disease
+saveRDS(Zhang2021_scRNA,file="Pro_CoExpression/output/data/3CA/Kidney/Zhang2021_Kidney/Zhang2021_scRNA.rds")
+
+####*normal####
+Zhang2021_normal_scRNA                 <- subset(Zhang2021_scRNA,disease=="non_cancer")
+table(Zhang2021_normal_scRNA$cell_type)
+library(CSCORE)
+DefaultAssay(Zhang2021_normal_scRNA)          <- 'RNA'
+celltype_interest                             <- c("B_cell","T_cell","Epithelial","Endothelial","Macrophage")
+Zhang2021_normal_CSCORE_cor                   <- list()
+Zhang2021_normal_CSCORE_padj                  <- list()
+for (i in 1:length(celltype_interest)) {
+  Obradovic2021_celltype_scRNA              <- subset(Zhang2021_normal_scRNA,cell_type==celltype_interest[i])
+  gene_expression_prop                <- rowMeans(Obradovic2021_celltype_scRNA@assays$RNA@counts > 0) #Calculate the expression ratio of each gene in cells
+  threshold                           <- 0.1  
+  genes_selected                      <- rownames(Obradovic2021_celltype_scRNA@assays$RNA@counts)[gene_expression_prop > threshold]
+  CSCORE_result                       <- CSCORE(Obradovic2021_celltype_scRNA, genes = genes_selected)
+  CSCORE_cor                          <- CSCORE_result$est
+  Zhang2021_normal_CSCORE_cor               <- append(Zhang2021_normal_CSCORE_cor,list(CSCORE_cor))
+  CSCORE_p                                  <- CSCORE_result$p_value
+  p_matrix_BH = matrix(0, length(genes_selected), length(genes_selected))
+  p_matrix_BH[upper.tri(CSCORE_p)] = p.adjust(CSCORE_p[upper.tri(CSCORE_p)], method = "BH")
+  p_matrix_BH                               <- p_matrix_BH + t(p_matrix_BH)
+  Zhang2021_normal_CSCORE_padj              <- append(Zhang2021_normal_CSCORE_padj,list(p_matrix_BH))
+}
+
+names(Zhang2021_normal_CSCORE_cor)          <- celltype_interest
+names(Zhang2021_normal_CSCORE_padj)         <- celltype_interest
+saveRDS(Zhang2021_normal_CSCORE_cor,file = "Pro_CoExpression/output/data/3CA/Kidney/Zhang2021_Kidney/Zhang2021_normal_CSCORE_cor.rds")
+saveRDS(Zhang2021_normal_CSCORE_padj,file = "Pro_CoExpression/output/data/3CA/Kidney/Zhang2021_Kidney/Zhang2021_normal_CSCORE_padj.rds")
+
+####*tumor####
+Zhang2021_tumor_scRNA                        <- subset(Zhang2021_scRNA,disease !="non_cancer")
+table(Zhang2021_tumor_scRNA$cell_type)
+library(CSCORE)
+DefaultAssay(Zhang2021_tumor_scRNA)          <- 'RNA'
+celltype_interest                            <- c("B_cell","T_cell","Malignant","Endothelial","Macrophage")
+Zhang2021_tumor_CSCORE_cor                   <- list()
+Zhang2021_tumor_CSCORE_padj                  <- list()
+for (i in 1:length(celltype_interest)) {
+  Obradovic2021_celltype_scRNA              <- subset(Zhang2021_tumor_scRNA,cell_type==celltype_interest[i])
+  gene_expression_prop                <- rowMeans(Obradovic2021_celltype_scRNA@assays$RNA@counts > 0) #Calculate the expression ratio of each gene in cells
+  threshold                           <- 0.1  
+  genes_selected                      <- rownames(Obradovic2021_celltype_scRNA@assays$RNA@counts)[gene_expression_prop > threshold]
+  CSCORE_result                       <- CSCORE(Obradovic2021_celltype_scRNA, genes = genes_selected)
+  CSCORE_cor                          <- CSCORE_result$est
+  Zhang2021_tumor_CSCORE_cor               <- append(Zhang2021_tumor_CSCORE_cor,list(CSCORE_cor))
+  CSCORE_p                                 <- CSCORE_result$p_value
+  p_matrix_BH = matrix(0, length(genes_selected), length(genes_selected))
+  p_matrix_BH[upper.tri(CSCORE_p)] = p.adjust(CSCORE_p[upper.tri(CSCORE_p)], method = "BH")
+  p_matrix_BH                              <- p_matrix_BH + t(p_matrix_BH)
+  Zhang2021_tumor_CSCORE_padj              <- append(Zhang2021_tumor_CSCORE_padj,list(p_matrix_BH))
+}
+
+names(Zhang2021_tumor_CSCORE_cor)       <- celltype_interest
+names(Zhang2021_tumor_CSCORE_padj)      <- celltype_interest
+saveRDS(Zhang2021_tumor_CSCORE_cor,file = "Pro_CoExpression/output/data/3CA/Kidney/Zhang2021_Kidney/Zhang2021_tumor_CSCORE_cor.rds")
+saveRDS(Zhang2021_tumor_CSCORE_padj,file = "Pro_CoExpression/output/data/3CA/Kidney/Zhang2021_Kidney/Zhang2021_tumor_CSCORE_padj.rds")
+
+####5.5 Krishna2021 dataset####
+Krishna2021_metadata                            <- read_csv("/home/BioklabData/3CA/Data/Kidney/Data_Krishna2021_Kidney/Meta-data.csv")
+Krishna2021_matrix                              <- readMM("/home/BioklabData/3CA/Data/Kidney/Data_Krishna2021_Kidney/Exp_data_UMIcounts.mtx")
+Cells                                           <- read_csv("/home/BioklabData/3CA/Data/Kidney/Data_Krishna2021_Kidney/Cells.csv")
+table(Cells$cell_type)
+table(Cells$type)
+gene                                            <- read.delim("/home/BioklabData/3CA/Data/Kidney/Data_Krishna2021_Kidney/Genes.txt",sep = "\t",header = F)
+
+rownames(Krishna2021_matrix)             <- gene$V1
+colnames(Krishna2021_matrix)             <- Cells$cell_name
+Krishna2021_scRNA                        <- CreateSeuratObject(counts = Krishna2021_matrix)
+Krishna2021_scRNA$orig.ident             <- Cells$sample
+Krishna2021_scRNA$cell_type              <- Cells$cell_type
+Krishna2021_scRNA$type                   <- Cells$type
+
+####*tumor####
+Krishna2021_tumor_scRNA                        <- subset(Krishna2021_scRNA,type=="Tumor")
+table(Krishna2021_tumor_scRNA$cell_type)
+library(CSCORE)
+DefaultAssay(Krishna2021_tumor_scRNA)          <- 'RNA'
+celltype_interest                              <- c("B_cell","T_cell","Malignant","Endothelial","Macrophage")
+Krishna2021_tumor_CSCORE_cor                   <- list()
+Krishna2021_tumor_CSCORE_padj                  <- list()
+for (i in 1:length(celltype_interest)) {
+  Obradovic2021_celltype_scRNA              <- subset(Krishna2021_tumor_scRNA,cell_type==celltype_interest[i])
+  gene_expression_prop                <- rowMeans(Obradovic2021_celltype_scRNA@assays$RNA@counts > 0) #Calculate the expression ratio of each gene in cells
+  threshold                           <- 0.1  
+  genes_selected                      <- rownames(Obradovic2021_celltype_scRNA@assays$RNA@counts)[gene_expression_prop > threshold]
+  CSCORE_result                       <- CSCORE(Obradovic2021_celltype_scRNA, genes = genes_selected)
+  CSCORE_cor                          <- CSCORE_result$est
+  Krishna2021_tumor_CSCORE_cor               <- append(Krishna2021_tumor_CSCORE_cor,list(CSCORE_cor))
+  CSCORE_p                                   <- CSCORE_result$p_value
+  p_matrix_BH = matrix(0, length(genes_selected), length(genes_selected))
+  p_matrix_BH[upper.tri(CSCORE_p)] = p.adjust(CSCORE_p[upper.tri(CSCORE_p)], method = "BH")
+  p_matrix_BH                                <- p_matrix_BH + t(p_matrix_BH)
+  Krishna2021_tumor_CSCORE_padj              <- append(Krishna2021_tumor_CSCORE_padj,list(p_matrix_BH))
+}
+
+names(Krishna2021_tumor_CSCORE_cor)          <- celltype_interest
+names(Krishna2021_tumor_CSCORE_padj)         <- celltype_interest
+saveRDS(Krishna2021_tumor_CSCORE_cor,file = "Pro_CoExpression/output/data/3CA/Kidney/Krishna2021_Kidney/Krishna2021_tumor_CSCORE_cor.rds")
+saveRDS(Krishna2021_tumor_CSCORE_padj,file = "Pro_CoExpression/output/data/3CA/Kidney/Krishna2021_Kidney/Krishna2021_tumor_CSCORE_padj.rds")
+
+####*normal####
+Krishna2021_normal_scRNA                        <- subset(Krishna2021_scRNA,type=="Normal")
+table(Krishna2021_normal_scRNA$cell_type)
+library(CSCORE)
+DefaultAssay(Krishna2021_normal_scRNA)          <- 'RNA'
+celltype_interest                               <- c("B_cell","T_cell","Epithelial","Endothelial","Macrophage")
+Krishna2021_normal_CSCORE_cor                   <- list()
+Krishna2021_normal_CSCORE_padj                  <- list()
+for (i in 1:length(celltype_interest)) {
+  Obradovic2021_celltype_scRNA              <- subset(Krishna2021_normal_scRNA,cell_type==celltype_interest[i])
+  gene_expression_prop                <- rowMeans(Obradovic2021_celltype_scRNA@assays$RNA@counts > 0) #Calculate the expression ratio of each gene in cells
+  threshold                           <- 0.1  
+  genes_selected                      <- rownames(Obradovic2021_celltype_scRNA@assays$RNA@counts)[gene_expression_prop > threshold]
+  CSCORE_result                       <- CSCORE(Obradovic2021_celltype_scRNA, genes = genes_selected)
+  CSCORE_cor                          <- CSCORE_result$est
+  Krishna2021_normal_CSCORE_cor               <- append(Krishna2021_normal_CSCORE_cor,list(CSCORE_cor))
+  CSCORE_p                                    <- CSCORE_result$p_value
+  p_matrix_BH = matrix(0, length(genes_selected), length(genes_selected))
+  p_matrix_BH[upper.tri(CSCORE_p)] = p.adjust(CSCORE_p[upper.tri(CSCORE_p)], method = "BH")
+  p_matrix_BH                                 <- p_matrix_BH + t(p_matrix_BH)
+  Krishna2021_normal_CSCORE_padj              <- append(Krishna2021_normal_CSCORE_padj,list(p_matrix_BH))
+}
+
+names(Krishna2021_normal_CSCORE_cor)       <- celltype_interest
+names(Krishna2021_normal_CSCORE_padj)      <- celltype_interest
+saveRDS(Krishna2021_normal_CSCORE_cor,file = "Pro_CoExpression/output/data/3CA/Kidney/Krishna2021_Kidney/Krishna2021_normal_CSCORE_cor.rds")
+saveRDS(Krishna2021_normal_CSCORE_padj,file = "Pro_CoExpression/output/data/3CA/Kidney/Krishna2021_Kidney/Krishna2021_normal_CSCORE_padj.rds")
+
+
+####create a metadata for kidney cancer samples####
+Bi2021_meta_data                   <- Bi2021_metadata[,c(2,17,19)] %>% mutate(dataset = rep("Bi2021_Kidney",8))
+Obradovic2021_meta_data            <- Obradovic2021_metadata[,2,drop=F]  %>% mutate(sample_primary_met=rep("primary",8),site=rep("tumor_and_normal",8),dataset = rep("Obradovic2021_Kidney",8))
+Young2018_meta_data                <- Young2018_metadata[-c(56:61),2,drop=F]  %>% mutate(sample_primary_met=c(rep("primary",55),rep("normal",5)),dataset = rep("Young2018_Kidney",60))
+Young2018_meta_data$site           <- apply(Young2018_meta_data,1,function(x){strsplit(x[1],"_")[[1]][3]})
+Young2018_meta_data$organ          <- apply(Young2018_meta_data,1,function(x){strsplit(x[1],"_")[[1]][2]})
+Young2018_meta_data                <- subset(Young2018_meta_data,organ!="Ure")
+Young2018_meta_data                <- subset(Young2018_meta_data,site!="R")
+Young2018_meta_data                <- Young2018_meta_data[,-5]
+Young2018_meta_data                <- Young2018_meta_data[,c(1,2,4,3)]
+Zhang2021_meta_data                <- Zhang2021_metadata[,2,drop=F]  %>%  mutate(sample_primary_met=rep("primary",14),dataset = rep("Zhang2021_Kidney",14)) 
+Zhang2021_meta_data                <- within(Zhang2021_meta_data,{
+  site  <- NA
+  site[sample %in% n_cell$sample]  <- "normal"
+  
+})
+Zhang2021_meta_data[is.na(Zhang2021_meta_data$site),4]     <- "tumor"
+Zhang2021_meta_data                                        <- Zhang2021_meta_data[,c(1,2,4,3)]
+Krishna2021_meta_data               <- Krishna2021_metadata[,c(1,7)]  %>%  mutate(sample_primary_met=rep("primary",29),dataset = rep("Krishna2021_Kidney",29))
+Krishna2021_meta_data               <- subset(Krishna2021_meta_data,type=="Normal"|type=="Tumor")
+Krishna2021_meta_data               <- Krishna2021_meta_data[,c(1,3,2,4)]
+colnames(Krishna2021_meta_data)[3]  <- "site"
+Kidney_metadata                     <-  bind_rows(Bi2021_meta_data,Krishna2021_meta_data,Obradovic2021_meta_data,Young2018_meta_data,Zhang2021_meta_data)
+write.csv(Kidney_metadata,file = "Pro_CoExpression/output/data/3CA/Kidney/Kidney_metadata.csv")
+
