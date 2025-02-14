@@ -109,7 +109,7 @@ RCC.metabolism.enrich.score              <- foreach(i = celltype.coexp,.combine 
 }
 saveRDS(RCC.metabolism.enrich.score,file="Pro_CoExpression/output/data/3CA/Kidney/common_genesets/RCC.metabolism.enrich.score.average.rds")
 
-####draw a heatmap####
+
 library(tibble)
 BRCA.metabolism.enrich.score.average   <- readRDS("~/Pro_CoExpression/output/data/3CA/Breast/common_genesets/BRCA.metabolism.enrich.score.average.rds")
 HCC.metabolism.enrich.score.average    <- readRDS("~/Pro_CoExpression/output/data/3CA/Liver/common_genesets/HCC.metabolism.enrich.score.average.rds")
@@ -130,51 +130,6 @@ tumor.metabolism.meta                  <- column_to_rownames(tumor.metabolism.me
 saveRDS(tumor.metabolism.enrich.score.average,file = "Pro_CoExpression/output/results/data/tumor.metabolism.enrich.score.average.rds")
 saveRDS(tumor.metabolism.meta,file = "Pro_CoExpression/output/results/data/tumor.metabolism.meta.rds")
 
-library(ComplexHeatmap)
-library(circlize)
-graphics = list(
-  "Breast cancer" = function(x, y, w, h) {
-    grid.text("B", x, y, gp = gpar(col = "darkgreen"))},
-  "Liver cancer" = function(x, y, w, h) {
-    grid.text("L", x, y, gp = gpar(col = "darkgreen"))},
-  "Ovarian cancer" = function(x, y, w, h) {
-    grid.text("O", x, y, gp = gpar(col = "darkgreen"))},
-  "Pancreas cancer" = function(x, y, w, h) {
-    grid.text("P", x, y, gp = gpar(col = "darkgreen"))},
-  "Kidney cancer" = function(x, y, w, h) {
-    grid.text("K", x, y, gp = gpar(col = "darkgreen"))}
-)
-lgd = Legend(labels =c("Breast cancer","Liver cancer","Ovarian cancer","Pancreas cancer","Kidney cancer") , title = "Tumor", type = "points", 
-             pch = c("B","L","O","P","K"),legend_gp = gpar(col = "darkgreen") ,background = "white")
-col.annotation <- HeatmapAnnotation(
-  Tumor = anno_customize(tumor.metabolism.meta$Tumor, graphics = graphics),
-  Celltype=tumor.metabolism.meta$Celltype,
-  col = list(
-    Celltype=c("Tcell"="#1f77b4","Bcell"= "#2ca02c","Fibroblast"= "#d62728", "Endothelial"="#9467bd","Macrophage"= "#ff7f0e","Malignant"= "#8c564b")
-  ))
-pdf(file = "Pro_CoExpression/output/results/plot/pathway/metabolism.pathway.complexheatmap.average.pdf",width = 20,height = 15)
-#set.seed(123)
-p2 <- Heatmap(
-  tumor.metabolism.enrich.score.average,
-  name = "Coexpression",
-  col =  colorRamp2(c(-0.05, 0.01, 0.05), c("navy","white","firebrick3")),
-  cluster_rows = T,
-  cluster_columns = T,
-  show_column_names = F,
-  show_row_names = T,
-  row_names_side = c("left"),
-  clustering_method_columns = "average",
-  clustering_distance_columns = "manhattan",
-  clustering_method_rows = "average",
-  clustering_distance_rows = "manhattan",
-  show_row_dend = F,
-  top_annotation = col.annotation,
-  width = ncol(tumor.metabolism.enrich.score.average)*unit(10, "mm"), 
-  height = nrow(tumor.metabolism.enrich.score.average)*unit(4, "mm"),
-  rect_gp = gpar(col = "black", lwd = 0.1)
-)
-draw(p2,annotation_legend_list = lgd)
-dev.off()
 
 ####signaling pathway####
 load("Pro_CoExpression/data/signaling_pathway_term_genelist.RData")
