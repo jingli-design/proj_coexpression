@@ -1,0 +1,606 @@
+####################################################
+####get reliable co-expression for Breast cancer####
+####################################################
+####tumor tissue####
+####*T_cell####
+#select co-expressed gene pairs
+dataset_list                              <- list("Azizi2018","Bassez2021","Gao2021","Griffiths2021","Qian2020","Savas2018","Wu2021")
+process_data_for_files                    <- function(dataset_list) {
+  Tcell_matrix_list                       <- list()
+  for ( dataset_id in dataset_list) {
+    cor_file_path                         <- paste0("~/Pro_CoExpression/output/data/3CA/Breast/",dataset_id,"_Breast/",dataset_id,"_CSCORE_cor.rds")
+    padj_file_path                        <- paste0("~/Pro_CoExpression/output/data/3CA/Breast/",dataset_id,"_Breast/",dataset_id,"_CSCORE_padj.rds")
+    tryCatch({
+      Tcell_cor                           <- readRDS(cor_file_path)$T_cell
+      Tcell_padj                          <- readRDS(padj_file_path)$T_cell
+      Tcell_cor[Tcell_padj > 0.05]        <- 0
+      Tcell_matrix_list                   <- append(Tcell_matrix_list,(list(Tcell_cor)))
+    },error=function(e){message(paste("Error processing dataset", dataset_id, ": ", e$message))
+    })
+  }
+  return(Tcell_matrix_list)
+}
+Tcell_matrix_list                        <- process_data_for_files(dataset_list)
+names(Tcell_matrix_list)                 <- unlist(dataset_list[-4])
+
+####merge the resluts of all datasets
+library(dplyr)
+library(tidyr)
+num_cores                                <- 7
+cl                                       <- makeCluster(num_cores)
+registerDoParallel(cl)
+all_pairs         <- data.frame(row = character(), col = character(), value = numeric(), stringsAsFactors = FALSE)
+for (mat in Tcell_matrix_list) {
+  mat[lower.tri(mat)] <- NA
+  temp_data       <- as.data.frame(which(!is.na(mat), arr.ind = TRUE))
+  temp_data$value <- mat[!is.na(mat)]
+  temp_data$gene1 <- rownames(mat)[temp_data$row]
+  temp_data$gene2 <- colnames(mat)[temp_data$col]
+  all_pairs       <- rbind(all_pairs, temp_data)
+}
+stopCluster(cl)
+all_pairs         <- do.call(rbind,all_pairs)
+#### Count the frequency of occurrence of each gene pair
+Tcell_pair_counts <- all_pairs %>%
+  group_by(gene1, gene2) %>%
+  summarise(count = n(), median_value = median(value, na.rm = TRUE),.groups = "drop") %>%
+  filter(count >= 2)  # Select gene pairs that appear in at least two matrices
+saveRDS(Tcell_pair_counts,file="Pro_CoExpression/output/data/3CA/Breast/common_genesets/Tcell/Tcell_pair_counts.rds")
+
+library(ggplot2)
+ggplot(Tcell_pair_counts, aes(y = median_value)) + 
+  geom_boxplot(outlier.colour = "red", outlier.shape = 16, outlier.size = 1) +
+  theme_minimal()
+stats                 <- boxplot.stats(Tcell_pair_counts$median_value)
+outlier               <- stats$out
+
+Q1                       <- quantile(Tcell_pair_counts$median_value, 0.25)
+Q3                       <- quantile(Tcell_pair_counts$median_value, 0.75)
+IQR                      <- Q3 - Q1
+threshold_1              <- Q3 + 1.5 * IQR #0
+threshold_2              <- Q1 - 1.5*IQR #0
+Tcell_reliable_coexp     <- Tcell_pair_counts[abs(Tcell_pair_counts$median_value) > threshold_1, ]
+Tcell_reliable_coexp_df  <- Tcell_reliable_coexp
+#2478543
+saveRDS(Tcell_reliable_coexp_df,file = "Pro_CoExpression/output/data/3CA/Breast/common_genesets/Tcell/Tcell_reliable_coexp_df.rds")
+
+####Convert data frame into matrixs
+library(data.table)
+genes                                         <- unique(c(Tcell_reliable_coexp$gene1, Tcell_reliable_coexp$gene2))
+corr_matrix                                   <- matrix(NA, nrow = length(genes), ncol = length(genes), dimnames = list(genes, genes))
+Tcell_reliable_coexp_dt                       <- as.data.table(Tcell_reliable_coexp)
+#Create an index mapping
+gene_index                                    <- setNames(seq_along(genes), genes)
+#Fill the correlation matrix with vectorization operation
+row_indices                                   <- gene_index[Tcell_reliable_coexp_dt$gene1]
+col_indices                                   <- gene_index[Tcell_reliable_coexp_dt$gene2]
+corr_matrix[cbind(row_indices, col_indices)]  <- Tcell_reliable_coexp_dt$median_value
+corr_matrix[cbind(col_indices, row_indices)]  <- Tcell_reliable_coexp_dt$median_value
+Tcell_pair_corr_matrix                        <- corr_matrix
+Tcell_pair_corr_matrix[is.na(Tcell_pair_corr_matrix)] <- 0
+Tcell_reliable_coexp_mat                              <- Tcell_pair_corr_matrix
+saveRDS(Tcell_reliable_coexp_mat,file="Pro_CoExpression/output/data/3CA/Breast/common_genesets/Tcell/Tcell_reliable_coexp_mat.rds")
+
+
+####*B_cell####
+#select co-expressed gene pairs
+library(doParallel)
+num_cores                          <- 8
+cl                                 <- makeCluster(num_cores)
+registerDoParallel(cl)
+dataset_list                       <- list("Azizi2018","Bassez2021","Gao2021","Griffiths2021","Qian2020","Savas2018","Wu2021")
+process_data_for_files             <- function(dataset_list) {
+  Bcell_matrix_list                      <- list()
+  for ( dataset_id in dataset_list) {
+    cor_file_path                        <- paste0("~/Pro_CoExpression/output/data/3CA/Breast/",dataset_id,"_Breast/",dataset_id,"_CSCORE_cor.rds")
+    padj_file_path                       <- paste0("~/Pro_CoExpression/output/data/3CA/Breast/",dataset_id,"_Breast/",dataset_id,"_CSCORE_padj.rds")
+    tryCatch({
+      Bcell_cor                         <- readRDS(cor_file_path)$B_cell
+      Bcell_padj                        <- readRDS(padj_file_path)$B_cell
+      Bcell_cor[Bcell_padj > 0.05]                <- 0
+      Bcell_matrix_list                           <- append(Bcell_matrix_list,(list(Bcell_cor)))
+    },error=function(e){message(paste("Error processing dataset", dataset_id, ": ", e$message))
+    })
+  }
+  return(Bcell_matrix_list)
+}
+Bcell_matrix_list         <- process_data_for_files(dataset_list)
+stopCluster(cl)
+Bcell_matrix_list         <- Bcell_matrix_list[-c(1,3,5)]
+names(Bcell_matrix_list)  <- unlist(dataset_list[c(2,5,7)])
+
+####merge the resluts of all datasets
+library(dplyr)
+library(tidyr)
+cl                                 <- makeCluster(num_cores)
+registerDoParallel(cl)
+all_pairs  <- foreach(mat = Bcell_matrix_list) %dopar% {
+  mat[lower.tri(mat)] <- NA
+  temp_data       <- as.data.frame(which(!is.na(mat), arr.ind = TRUE))
+  temp_data$value <- mat[!is.na(mat)]
+  temp_data$gene1 <- rownames(mat)[temp_data$row]
+  temp_data$gene2 <- colnames(mat)[temp_data$col]
+  temp_data
+} 
+stopCluster(cl)
+all_pairs         <- do.call(rbind,all_pairs)
+
+#### Count the frequency of occurrence of each gene pair
+Bcell_pair_counts <- all_pairs %>%
+  group_by(gene1, gene2) %>%
+  summarise(count = n(), median_value = median(value, na.rm = TRUE),.groups = "drop") %>%
+  filter(count >= 2)  # Select gene pairs that appear in at least two matrices
+saveRDS(Bcell_pair_counts,file="Pro_CoExpression/output/data/3CA/Breast/common_genesets/Bcell/Bcell_pair_counts.rds")
+
+library(ggplot2)
+ggplot(Bcell_pair_counts, aes(y = median_value)) + 
+  geom_boxplot(outlier.colour = "red", outlier.shape = 16, outlier.size = 1) +
+  theme_minimal()
+stats                 <- boxplot.stats(Bcell_pair_counts$median_value)
+outlier               <- stats$out
+
+Q1                    <- quantile(Bcell_pair_counts$median_value, 0.25)
+Q3                    <- quantile(Bcell_pair_counts$median_value, 0.75)
+IQR                   <- Q3 - Q1
+threshold_1           <- Q3 + 1.5 * IQR #1.03
+threshold_2           <- Q1 - 1.5*IQR  #-0.403
+Bcell_reliable_coexp  <- Bcell_pair_counts[Bcell_pair_counts$median_value > threshold_1 |
+                                             Bcell_pair_counts$median_value < threshold_2, ]
+#5536
+Bcell_reliable_coexp_df    <- Bcell_reliable_coexp
+save(Bcell_reliable_coexp_df,file = "Pro_CoExpression/output/data/3CA/Breast/common_genesets/Bcell/Bcell_reliable_coexp_df.RData")
+
+####Convert data frame into matrixs
+library(data.table)
+genes                                         <- unique(c(Bcell_reliable_coexp$gene1, Bcell_reliable_coexp$gene2))
+corr_matrix                                   <- matrix(NA, nrow = length(genes), ncol = length(genes), dimnames = list(genes, genes))
+Bcell_reliable_coexp_dt                       <- as.data.table(Bcell_reliable_coexp)
+#Create an index mapping
+gene_index                                    <- setNames(seq_along(genes), genes)
+#Fill the correlation matrix with vectorization operation
+row_indices                                   <- gene_index[Bcell_reliable_coexp_dt$gene1]
+col_indices                                   <- gene_index[Bcell_reliable_coexp_dt$gene2]
+corr_matrix[cbind(row_indices, col_indices)]  <- Bcell_reliable_coexp_dt$median_value
+corr_matrix[cbind(col_indices, row_indices)]  <- Bcell_reliable_coexp_dt$median_value
+Bcell_pair_corr_matrix                        <- corr_matrix
+Bcell_pair_corr_matrix[is.na(Bcell_pair_corr_matrix)] <- 0
+Bcell_reliable_coexp_mat          <- Bcell_pair_corr_matrix
+saveRDS(Bcell_reliable_coexp_mat,file="Pro_CoExpression/output/data/3CA/Breast/common_genesets/Bcell/Bcell_reliable_coexp_mat.rds")
+
+
+####*Fibroblast####
+#select co-expressed gene pairs
+library(foreach)
+library(doParallel)
+num_cores                          <- 8
+cl                                 <- makeCluster(num_cores)
+registerDoParallel(cl)
+dataset_list                       <- list("Azizi2018","Bassez2021","Gao2021","Griffiths2021","Qian2020","Savas2018","Wu2021")
+process_data_for_files             <- function(dataset_list) {
+  Fibroblast_matrix_list                      <- list()
+  for ( dataset_id in dataset_list) {
+    cor_file_path                        <- paste0("~/Pro_CoExpression/output/data/3CA/Breast/",dataset_id,"_Breast/",dataset_id,"_CSCORE_cor.rds")
+    padj_file_path                       <- paste0("~/Pro_CoExpression/output/data/3CA/Breast/",dataset_id,"_Breast/",dataset_id,"_CSCORE_padj.rds")
+    tryCatch({
+      Fibroblast_cor                         <- readRDS(cor_file_path)$Fibroblast
+      Fibroblast_padj                        <- readRDS(padj_file_path)$Fibroblast
+      Fibroblast_cor[Fibroblast_padj > 0.05]           <- 0
+      Fibroblast_matrix_list                           <- append(Fibroblast_matrix_list,(list(Fibroblast_cor)))
+    },error=function(e){message(paste("Error processing dataset", dataset_id, ": ", e$message))
+    })
+  }
+  return(Fibroblast_matrix_list)
+}
+Fibroblast_matrix_list         <- process_data_for_files(dataset_list)
+stopCluster(cl)
+Fibroblast_matrix_list         <- Fibroblast_matrix_list[-c(1,5)]
+names(Fibroblast_matrix_list)  <- unlist(dataset_list[c(2,3,5,7)])
+#Pal2021_dataset
+Fibroblast_cor                         <- readRDS("Pro_CoExpression/output/data/3CA/Breast/Pal2021_Breast/Pal2021_tumor_primary_CSCORE_cor.rds")$Fibroblast
+Fibroblast_padj                        <- readRDS("Pro_CoExpression/output/data/3CA/Breast/Pal2021_Breast/Pal2021_tumor_primary_CSCORE_padj.rds")$Fibroblast
+Fibroblast_cor[Fibroblast_padj > 0.05]      <- 0
+Fibroblast_matrix_list               <- append(Fibroblast_matrix_list,(list(Fibroblast_cor)))
+names(Fibroblast_matrix_list)[5]  <- "Pal2021"
+
+####merge the resluts of all datasets
+library(dplyr)
+library(tidyr)
+cl                                 <- makeCluster(num_cores)
+registerDoParallel(cl)
+all_pairs         <- data.frame(row = character(), col = character(), value = numeric(), stringsAsFactors = FALSE)
+for (mat in Fibroblast_matrix_list) {
+  mat[lower.tri(mat)] <- NA
+  temp_data       <- as.data.frame(which(!is.na(mat), arr.ind = TRUE))
+  temp_data$value <- mat[!is.na(mat)]
+  temp_data$gene1 <- rownames(mat)[temp_data$row]
+  temp_data$gene2 <- colnames(mat)[temp_data$col]
+  all_pairs       <- rbind(all_pairs, temp_data)
+}
+stopCluster(cl)
+
+#### Count the frequency of occurrence of each gene pair
+Fibroblast_pair_counts <- all_pairs %>%
+  group_by(gene1, gene2) %>%
+  summarise(count = n(), median_value = median(value, na.rm = TRUE),.groups = "drop") %>%
+  filter(count >= 2)  # Select gene pairs that appear in at least two matrices
+saveRDS(Fibroblast_pair_counts,file="Pro_CoExpression/output/data/3CA/Breast/common_genesets/Fibroblast/Fibroblast_pair_counts.rds")
+
+
+library(ggplot2)
+ggplot(Fibroblast_pair_counts, aes(y = median_value)) + 
+  geom_boxplot(outlier.colour = "red", outlier.shape = 16, outlier.size = 1) +
+  theme_minimal()
+stats               <- boxplot.stats(Fibroblast_pair_counts$median_value)
+outlier             <- stats$out
+
+Q1                    <- quantile(Fibroblast_pair_counts$median_value, 0.25)
+Q3                    <- quantile(Fibroblast_pair_counts$median_value, 0.75)
+IQR                   <- Q3 - Q1
+threshold_1           <- Q3 + 1.5 * IQR #0
+threshold_2           <- Q1 - 1.5*IQR#0
+Fibroblast_reliable_coexp  <- Fibroblast_pair_counts[Fibroblast_pair_counts$median_value > threshold_1 |
+                                                       Fibroblast_pair_counts$median_value < threshold_2, ]
+#2456982
+Fibroblast_reliable_coexp_df  <- Fibroblast_reliable_coexp
+save(Fibroblast_reliable_coexp_df,file = "Pro_CoExpression/output/data/3CA/Breast/common_genesets/Fibroblast/Fibroblast_reliable_coexp_df.RData")
+
+####Convert data frame into matrixs
+library(data.table)
+genes                                         <- unique(c(Fibroblast_reliable_coexp$gene1, Fibroblast_reliable_coexp$gene2))
+corr_matrix                                   <- matrix(NA, nrow = length(genes), ncol = length(genes), dimnames = list(genes, genes))
+Fibroblast_reliable_coexp_dt                       <- as.data.table(Fibroblast_reliable_coexp)
+#Create an index mapping
+gene_index                                    <- setNames(seq_along(genes), genes)
+#Fill the correlation matrix with vectorization operation
+row_indices                                   <- gene_index[Fibroblast_reliable_coexp_dt$gene1]
+col_indices                                   <- gene_index[Fibroblast_reliable_coexp_dt$gene2]
+corr_matrix[cbind(row_indices, col_indices)]  <- Fibroblast_reliable_coexp_dt$median_value
+corr_matrix[cbind(col_indices, row_indices)]  <- Fibroblast_reliable_coexp_dt$median_value
+Fibroblast_pair_corr_matrix                        <- corr_matrix
+Fibroblast_pair_corr_matrix[is.na(Fibroblast_pair_corr_matrix)] <- 0
+Fibroblast_reliable_coexp_mat  <- Fibroblast_pair_corr_matrix
+saveRDS(Fibroblast_reliable_coexp_mat,file="Pro_CoExpression/output/data/3CA/Breast/common_genesets/Fibroblast/Fibroblast_reliable_coexp_mat.rds")
+
+####*Endothelial####
+#select co-expressed gene pairs
+library(foreach)
+library(doParallel)
+num_cores                          <- 8
+cl                                 <- makeCluster(num_cores)
+registerDoParallel(cl)
+dataset_list                       <- list("Azizi2018","Bassez2021","Gao2021","Griffiths2021","Qian2020","Savas2018","Wu2021")
+process_data_for_files             <- function(dataset_list) {
+  Endothelial_matrix_list                      <- list()
+  for ( dataset_id in dataset_list) {
+    cor_file_path                        <- paste0("~/Pro_CoExpression/output/data/3CA/Breast/",dataset_id,"_Breast/",dataset_id,"_CSCORE_cor.rds")
+    padj_file_path                       <- paste0("~/Pro_CoExpression/output/data/3CA/Breast/",dataset_id,"_Breast/",dataset_id,"_CSCORE_padj.rds")
+    tryCatch({
+      Endothelial_cor                         <- readRDS(cor_file_path)$Endothelial
+      Endothelial_padj                        <- readRDS(padj_file_path)$Endothelial
+      Endothelial_cor[Endothelial_padj > 0.05]           <- 0
+      Endothelial_matrix_list                           <- append(Endothelial_matrix_list,(list(Endothelial_cor)))
+    },error=function(e){message(paste("Error processing dataset", dataset_id, ": ", e$message))
+    })
+  }
+  return(Endothelial_matrix_list)
+}
+Endothelial_matrix_list         <- process_data_for_files(dataset_list)
+stopCluster(cl)
+Endothelial_matrix_list         <- Endothelial_matrix_list[-c(1,3,5)]
+names(Endothelial_matrix_list)  <- unlist(dataset_list[c(2,5,7)])
+#Pal2021_dataset
+Endothelial_cor                         <- readRDS("Pro_CoExpression/output/data/3CA/Breast/Pal2021_Breast/Pal2021_tumor_primary_CSCORE_cor.rds")$Endothelial
+Endothelial_padj                        <- readRDS("Pro_CoExpression/output/data/3CA/Breast/Pal2021_Breast/Pal2021_tumor_primary_CSCORE_padj.rds")$Endothelial
+Endothelial_cor[Endothelial_padj > 0.05]      <- 0
+Endothelial_matrix_list               <- append(Endothelial_matrix_list,(list(Endothelial_cor)))
+names(Endothelial_matrix_list)[4]  <- "Pal2021"
+
+####merge the resluts of all datasets
+library(dplyr)
+library(tidyr)
+cl                                 <- makeCluster(num_cores)
+registerDoParallel(cl)
+all_pairs  <- foreach(mat = Endothelial_matrix_list) %dopar% {
+  mat[lower.tri(mat)] <- NA
+  temp_data       <- as.data.frame(which(!is.na(mat), arr.ind = TRUE))
+  temp_data$value <- mat[!is.na(mat)]
+  temp_data$gene1 <- rownames(mat)[temp_data$row]
+  temp_data$gene2 <- colnames(mat)[temp_data$col]
+  temp_data
+} 
+stopCluster(cl) 
+all_pairs         <- do.call(rbind,all_pairs)
+
+#### Count the frequency of occurrence of each gene pair
+Endothelial_pair_counts <- all_pairs %>%
+  group_by(gene1, gene2) %>%
+  summarise(count = n(), median_value = median(value, na.rm = TRUE),.groups = "drop") %>%
+  filter(count >= 2)  # Select gene pairs that appear in at least two matrices
+saveRDS(Endothelial_pair_counts,file="Pro_CoExpression/output/data/3CA/Breast/common_genesets/Endothelial/Endothelial_pair_counts.rds")
+
+library(ggplot2)
+ggplot(Endothelial_pair_counts, aes(y = median_value)) + 
+  geom_boxplot(outlier.colour = "red", outlier.shape = 16, outlier.size = 1) +
+  theme_minimal()
+stats               <- boxplot.stats(Endothelial_pair_counts$median_value)
+outlier             <- stats$out
+
+Q1                    <- quantile(Endothelial_pair_counts$median_value, 0.25)
+Q3                    <- quantile(Endothelial_pair_counts$median_value, 0.75)
+IQR                   <- Q3 - Q1
+threshold_1           <- Q3 + 1.5 * IQR#0
+threshold_2           <- Q1 - 1.5*IQR#0
+Endothelial_reliable_coexp  <- Endothelial_pair_counts[Endothelial_pair_counts$median_value > threshold_1 |
+                                                         Endothelial_pair_counts$median_value < threshold_2, ]
+#2552337
+Endothelial_reliable_coexp_df   <- Endothelial_reliable_coexp
+save(Endothelial_reliable_coexp_df,file = "Pro_CoExpression/output/data/3CA/Breast/common_genesets/Endothelial/Endothelial_reliable_coexp_df.RData")
+
+####Convert data frame into matrixs
+library(data.table)
+genes                                         <- unique(c(Endothelial_reliable_coexp$gene1, Endothelial_reliable_coexp$gene2))
+corr_matrix                                   <- matrix(NA, nrow = length(genes), ncol = length(genes), dimnames = list(genes, genes))
+Endothelial_reliable_coexp_dt                       <- as.data.table(Endothelial_reliable_coexp)
+#Create an index mapping
+gene_index                                    <- setNames(seq_along(genes), genes)
+#Fill the correlation matrix with vectorization operation
+row_indices                                   <- gene_index[Endothelial_reliable_coexp_dt$gene1]
+col_indices                                   <- gene_index[Endothelial_reliable_coexp_dt$gene2]
+corr_matrix[cbind(row_indices, col_indices)]  <- Endothelial_reliable_coexp_dt$median_value
+corr_matrix[cbind(col_indices, row_indices)]  <- Endothelial_reliable_coexp_dt$median_value
+Endothelial_pair_corr_matrix                        <- corr_matrix
+Endothelial_pair_corr_matrix[is.na(Endothelial_pair_corr_matrix)] <- 0
+Endothelial_reliable_coexp_mat <- Endothelial_pair_corr_matrix
+saveRDS(Endothelial_reliable_coexp_mat,file="Pro_CoExpression/output/data/3CA/Breast/common_genesets/Endothelial/Endothelial_reliable_coexp_mat.rds")
+
+####*Macrophage####
+#select co-expressed gene pairs
+dataset_list                       <- list("Azizi2018","Bassez2021","Gao2021","Griffiths2021","Qian2020","Savas2018","Wu2021")
+process_data_for_files             <- function(dataset_list) {
+  Macrophage_matrix_list                      <- list()
+  for ( dataset_id in dataset_list) {
+    cor_file_path                        <- paste0("~/Pro_CoExpression/output/data/3CA/Breast/",dataset_id,"_Breast/",dataset_id,"_CSCORE_cor.rds")
+    padj_file_path                       <- paste0("~/Pro_CoExpression/output/data/3CA/Breast/",dataset_id,"_Breast/",dataset_id,"_CSCORE_padj.rds")
+    tryCatch({
+      Macrophage_cor                         <- readRDS(cor_file_path)$Macrophage
+      Macrophage_padj                        <- readRDS(padj_file_path)$Macrophage
+      Macrophage_cor[Macrophage_padj > 0.05]           <- 0
+      Macrophage_matrix_list                           <- append(Macrophage_matrix_list,(list(Macrophage_cor)))
+    },error=function(e){message(paste("Error processing dataset", dataset_id, ": ", e$message))
+    })
+  }
+  return(Macrophage_matrix_list)
+}
+Macrophage_matrix_list         <- process_data_for_files(dataset_list)
+Macrophage_matrix_list         <- Macrophage_matrix_list[-c(1,2,5)]
+names(Macrophage_matrix_list)  <- unlist(dataset_list[c(3,5,7)])
+
+####merge the resluts of all datasets
+library(dplyr)
+library(tidyr)
+all_pairs         <- data.frame(row = character(), col = character(), value = numeric(), stringsAsFactors = FALSE)
+for (mat in Macrophage_matrix_list) {
+  mat[lower.tri(mat)] <- NA
+  temp_data       <- as.data.frame(which(!is.na(mat), arr.ind = TRUE))
+  temp_data$value <- mat[!is.na(mat)]
+  temp_data$gene1 <- rownames(mat)[temp_data$row]
+  temp_data$gene2 <- colnames(mat)[temp_data$col]
+  all_pairs       <- rbind(all_pairs, temp_data)
+}
+
+#### Count the frequency of occurrence of each gene pair
+Macrophage_pair_counts <- all_pairs %>%
+  group_by(gene1, gene2) %>%
+  summarise(count = n(), median_value = median(value, na.rm = TRUE),.groups = "drop") %>%
+  filter(count >= 2)  # Select gene pairs that appear in at least two matrices
+saveRDS(Macrophage_pair_counts,file="Pro_CoExpression/output/data/3CA/Breast/common_genesets/Macrophage/Macrophage_pair_counts.rds")
+
+library(ggplot2)
+ggplot(Macrophage_pair_counts, aes(y = median_value)) + 
+  geom_boxplot(outlier.colour = "red", outlier.shape = 16, outlier.size = 1) +
+  theme_minimal()
+stats                 <- boxplot.stats(Macrophage_pair_counts$median_value)
+outlier               <- stats$out
+Q1                    <- quantile(Macrophage_pair_counts$median_value, 0.25)
+Q3                    <- quantile(Macrophage_pair_counts$median_value, 0.75)
+IQR                   <- Q3 - Q1
+threshold_1           <- Q3 + 1.5 * IQR#0
+threshold_2           <- Q1 - 1.5*IQR#0
+Macrophage_reliable_coexp  <- Macrophage_pair_counts[Macrophage_pair_counts$median_value > threshold_1 |
+                                                       Macrophage_pair_counts$median_value < threshold_2, ]
+#1758860
+Macrophage_reliable_coexp_df <-  Macrophage_reliable_coexp
+save(Macrophage_reliable_coexp_df,file = "Pro_CoExpression/output/data/3CA/Breast/common_genesets/Macrophage/Macrophage_reliable_coexp_df.RData")
+
+####Convert data frame into matrixs
+library(data.table)
+genes                                         <- unique(c(Macrophage_reliable_coexp$gene1, Macrophage_reliable_coexp$gene2))
+corr_matrix                                   <- matrix(NA, nrow = length(genes), ncol = length(genes), dimnames = list(genes, genes))
+Macrophage_reliable_coexp_dt                       <- as.data.table(Macrophage_reliable_coexp)
+#Create an index mapping
+gene_index                                    <- setNames(seq_along(genes), genes)
+#Fill the correlation matrix with vectorization operation
+row_indices                                   <- gene_index[Macrophage_reliable_coexp_dt$gene1]
+col_indices                                   <- gene_index[Macrophage_reliable_coexp_dt$gene2]
+corr_matrix[cbind(row_indices, col_indices)]  <- Macrophage_reliable_coexp_dt$median_value
+corr_matrix[cbind(col_indices, row_indices)]  <- Macrophage_reliable_coexp_dt$median_value
+Macrophage_pair_corr_matrix                        <- corr_matrix
+Macrophage_pair_corr_matrix[is.na(Macrophage_pair_corr_matrix)] <- 0
+Macrophage_reliable_coexp_mat <- Macrophage_pair_corr_matrix
+saveRDS(Macrophage_reliable_coexp_mat,file="Pro_CoExpression/output/data/3CA/Breast/common_genesets/Macrophage/Macrophage_reliable_coexp_mat.rds")
+
+####*Malignant:primary####
+#select co-expressed gene pairs
+library(foreach)
+library(doParallel)
+num_cores                          <- 4
+cl                                 <- makeCluster(num_cores)
+registerDoParallel(cl)
+dataset_list                       <- list("Azizi2018","Bassez2021","Gao2021","Griffiths2021","Qian2020","Savas2018","Wu2021")
+process_data_for_files             <- function(dataset_list) {
+  Malignant_matrix_list                      <- list()
+  for ( dataset_id in dataset_list) {
+    cor_file_path                        <- paste0("~/Pro_CoExpression/output/data/3CA/Breast/",dataset_id,"_Breast/",dataset_id,"_CSCORE_cor.rds")
+    padj_file_path                       <- paste0("~/Pro_CoExpression/output/data/3CA/Breast/",dataset_id,"_Breast/",dataset_id,"_CSCORE_padj.rds")
+    tryCatch({
+      Malignant_cor                         <- readRDS(cor_file_path)$Malignant
+      Malignant_padj                        <- readRDS(padj_file_path)$Malignant
+      Malignant_cor[Malignant_padj > 0.05]           <- 0
+      Malignant_matrix_list                           <- append(Malignant_matrix_list,(list(Malignant_cor)))
+    },error=function(e){message(paste("Error processing dataset", dataset_id, ": ", e$message))
+    })
+  }
+  return(Malignant_matrix_list)
+}
+Malignant_matrix_list         <- process_data_for_files(dataset_list)
+stopCluster(cl)
+Malignant_matrix_list         <- Malignant_matrix_list[-c(1,5)]
+names(Malignant_matrix_list)  <- unlist(dataset_list[c(2,3,5,7)])
+#Pal2021_dataset
+Malignant_cor                         <- readRDS("Pro_CoExpression/output/data/3CA/Breast/Pal2021_Breast/Pal2021_tumor_primary_CSCORE_cor.rds")$Cancer_cell
+Malignant_padj                        <- readRDS("Pro_CoExpression/output/data/3CA/Breast/Pal2021_Breast/Pal2021_tumor_primary_CSCORE_padj.rds")$Cancer_cell
+Malignant_cor[Malignant_padj > 0.05]      <- 0
+Malignant_matrix_list               <- append(Malignant_matrix_list,(list(Malignant_cor)))
+names(Malignant_matrix_list)[5]     <- "Pal2021"
+#Griffiths2021 
+Griffiths2021_Malignant_cor                         <- readRDS("Pro_CoExpression/output/data/3CA/Breast/Griffiths2021_Breast/Griffiths2021_CSCORE_cor.rds")
+Griffiths2021_Malignant_padj                        <- readRDS("Pro_CoExpression/output/data/3CA/Breast/Griffiths2021_Breast/Griffiths2021_CSCORE_padj.rds")
+Griffiths2021_Malignant_cor[Griffiths2021_Malignant_padj > 0.05]      <- 0
+Malignant_matrix_list                 <- append(Malignant_matrix_list,(list(Griffiths2021_Malignant_cor)))
+names(Malignant_matrix_list)[6]                     <- "Griffiths2021"
+
+####merge the resluts of all datasets
+library(dplyr)
+library(tidyr)
+cl                                 <- makeCluster(num_cores)
+registerDoParallel(cl)
+all_pairs  <- foreach(mat = Malignant_matrix_list) %dopar% {
+  mat[lower.tri(mat)] <- NA
+  temp_data       <- as.data.frame(which(!is.na(mat), arr.ind = TRUE))
+  temp_data$value <- mat[!is.na(mat)]
+  temp_data$gene1 <- rownames(mat)[temp_data$row]
+  temp_data$gene2 <- colnames(mat)[temp_data$col]
+  temp_data
+} 
+stopCluster(cl)
+all_pairs         <- do.call(rbind,all_pairs)
+saveRDS(all_pairs,file="Pro_CoExpression/output/data/3CA/Breast/common_genesets/Malignant/Malignant_all_pairs.rds")
+
+#### Count the frequency of occurrence of each gene pair
+library(data.table)
+#Convert the data frame to data.table
+setDT(Malignant_all_pairs)
+Malignant_pair_counts <- Malignant_all_pairs[, 
+                                             .(count = .N, 
+                                               median_value = median(value, na.rm = TRUE)), 
+                                             by = .(gene1, gene2)]
+Malignant_pair_counts <- Malignant_pair_counts[count >= 2]
+saveRDS(Malignant_pair_counts,file="Pro_CoExpression/output/data/3CA/Breast/common_genesets/Malignant/Malignant_pair_counts.rds")
+
+
+library(ggplot2)
+ggplot(Malignant_pair_counts, aes(y = median_value)) + 
+  geom_boxplot(outlier.colour = "red", outlier.shape = 16, outlier.size = 1) +
+  theme_minimal()
+stats               <- boxplot.stats(Malignant_pair_counts$median_value)
+outlier             <- stats$out
+Q1                    <- quantile(Malignant_pair_counts$median_value, 0.25)
+Q3                    <- quantile(Malignant_pair_counts$median_value, 0.75)
+IQR                   <- Q3 - Q1
+threshold_1           <- Q3 + 1.5 * IQR #0.279
+threshold_2           <- Q1 - 1.5*IQR #-0.167
+Malignant_reliable_coexp  <- Malignant_pair_counts[Malignant_pair_counts$median_value > threshold_1 |
+                                                     Malignant_pair_counts$median_value < threshold_2, ]
+#4540746
+Malignant_reliable_coexp_df  <- Malignant_reliable_coexp
+save(Malignant_reliable_coexp_df,file = "Pro_CoExpression/output/data/3CA/Breast/common_genesets/Malignant/Malignant_reliable_coexp_df.RData")
+
+####Convert data frame into matrixs
+library(data.table)
+genes                                         <- unique(c(Malignant_reliable_coexp$gene1, Malignant_reliable_coexp$gene2))
+corr_matrix                                   <- matrix(NA, nrow = length(genes), ncol = length(genes), dimnames = list(genes, genes))
+Malignant_reliable_coexp_dt                       <- as.data.table(Malignant_reliable_coexp)
+#Create an index mapping
+gene_index                                    <- setNames(seq_along(genes), genes)
+#Fill the correlation matrix with vectorization operation
+row_indices                                   <- gene_index[Malignant_reliable_coexp_dt$gene1]
+col_indices                                   <- gene_index[Malignant_reliable_coexp_dt$gene2]
+corr_matrix[cbind(row_indices, col_indices)]  <- Malignant_reliable_coexp_dt$median_value
+corr_matrix[cbind(col_indices, row_indices)]  <- Malignant_reliable_coexp_dt$median_value
+Malignant_pair_corr_matrix                        <- corr_matrix
+Malignant_pair_corr_matrix[is.na(Malignant_pair_corr_matrix)] <- 0
+Malignant_reliable_coexp_mat <- Malignant_pair_corr_matrix
+saveRDS(Malignant_reliable_coexp_mat,file="Pro_CoExpression/output/data/3CA/Breast/common_genesets/Malignant/Malignant_reliable_coexp_mat.rds")
+
+
+
+####Normal tissue####
+Pal2021_normal_CSCORE_cor             <- readRDS("~/Pro_CoExpression/output/data/3CA/Breast/Pal2021_Breast/Pal2021_normal_CSCORE_cor.rds")
+Pal2021_normal_CSCORE_padj            <- readRDS("~/Pro_CoExpression/output/data/3CA/Breast/Pal2021_Breast/Pal2021_normal_CSCORE_padj.rds")
+####*Fibroblast####
+Fibroblast_normal_cor                 <- Pal2021_normal_CSCORE_cor$Fibroblast
+Fibroblast_normal_padj                <- Pal2021_normal_CSCORE_padj$Fibroblast
+Fibroblast_normal_cor[Fibroblast_normal_padj >0.05]  <- 0
+
+Fibroblast_matrix_list  <- list(Fibroblast_normal_cor)
+all_pairs         <- data.frame(row = character(), col = character(), value = numeric(), stringsAsFactors = FALSE)
+for (mat in Fibroblast_matrix_list) {
+  mat[lower.tri(mat)]    <- NA
+  temp_data       <- as.data.frame(which(!is.na(mat), arr.ind = TRUE))
+  temp_data$value <- mat[!is.na(mat)]
+  temp_data$gene1 <- rownames(mat)[temp_data$row]
+  temp_data$gene2 <- colnames(mat)[temp_data$col]
+  all_pairs       <- rbind(all_pairs, temp_data)
+}
+Fibroblast_normal_Breast_pair_counts <- all_pairs  
+saveRDS(Fibroblast_normal_Breast_pair_counts,file="Pro_CoExpression/output/data/3CA/Breast/common_genesets/Malignant/Fibroblast_normal_Breast_pair_counts.rds")
+
+stats                 <- boxplot.stats(Fibroblast_normal_Breast_pair_counts$value)
+outlier               <- stats$out
+
+Q1                    <- quantile(Fibroblast_normal_Breast_pair_counts$value, 0.25)
+Q3                    <- quantile(Fibroblast_normal_Breast_pair_counts$value, 0.75)
+IQR                   <- Q3 - Q1
+threshold_1           <- Q3 + 1.5 * IQR #0 
+threshold_2           <- Q1 - 1.5*IQR #0 
+Fibroblast_normal_reliable_coexp     <- Fibroblast_normal_Breast_pair_counts[abs(Fibroblast_normal_Breast_pair_counts$value) > threshold_1, ]
+Fibroblast_normal_reliable_coexp_df  <- Fibroblast_normal_reliable_coexp
+#1929819
+saveRDS(Fibroblast_normal_reliable_coexp_df,file = "Pro_CoExpression/output/data/3CA/Breast/common_genesets/Fibroblast/Fibroblast_normal_reliable_coexp_df.rds")
+
+Fibroblast_normal_reliable_coexp_mat  <- Fibroblast_normal_cor
+saveRDS(Fibroblast_normal_reliable_coexp_mat,file = "Pro_CoExpression/output/data/3CA/Breast/common_genesets/Fibroblast/Fibroblast_normal_reliable_coexp_mat.rds")
+
+####*Epithelial####
+Epithelial_normal_cor          <- Pal2021_normal_CSCORE_cor$`Normal epithelium`
+Epithelial_normal_padj         <- Pal2021_normal_CSCORE_padj$`Normal epithelium`
+Epithelial_normal_cor[Epithelial_normal_padj>0.05]  <- 0
+
+Epithelial_matrix_list  <- list(Epithelial_normal_cor)
+all_pairs         <- data.frame(row = character(), col = character(), value = numeric(), stringsAsFactors = FALSE)
+for (mat in Epithelial_matrix_list) {
+  mat[lower.tri(mat)]    <- NA
+  temp_data       <- as.data.frame(which(!is.na(mat), arr.ind = TRUE))
+  temp_data$value <- mat[!is.na(mat)]
+  temp_data$gene1 <- rownames(mat)[temp_data$row]
+  temp_data$gene2 <- colnames(mat)[temp_data$col]
+  all_pairs       <- rbind(all_pairs, temp_data)
+}
+Epithelial_normal_Breast_pair_counts <- all_pairs  
+saveRDS(Epithelial_normal_Breast_pair_counts,file="Pro_CoExpression/output/data/3CA/Breast/common_genesets/Malignant/Epithelial_normal_Breast_pair_counts.rds")
+
+stats                 <- boxplot.stats(Epithelial_normal_Breast_pair_counts$value)
+outlier               <- stats$out
+
+Q1                    <- quantile(Epithelial_normal_Breast_pair_counts$value, 0.25)
+Q3                    <- quantile(Epithelial_normal_Breast_pair_counts$value, 0.75)
+IQR                   <- Q3 - Q1
+threshold_1           <- Q3 + 1.5 * IQR #0 
+threshold_2           <- Q1 - 1.5*IQR #0
+Epithelial_normal_reliable_coexp     <- Epithelial_normal_Breast_pair_counts[abs(Epithelial_normal_Breast_pair_counts$value) > threshold_1, ]
+Epithelial_normal_reliable_coexp_df  <- Epithelial_normal_reliable_coexp
+#3900394
+saveRDS(Epithelial_normal_reliable_coexp_df,file = "Pro_CoExpression/output/data/3CA/Breast/common_genesets/Malignant/Epithelial_normal_reliable_coexp_df.rds")
+
+Epithelial_normal_reliable_coexp_mat  <- Epithelial_normal_cor
+saveRDS(Epithelial_normal_reliable_coexp_mat,file = "Pro_CoExpression/output/data/3CA/Breast/common_genesets/Malignant/Epithelial_normal_reliable_coexp_mat.rds")
