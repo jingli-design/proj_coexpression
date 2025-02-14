@@ -1,0 +1,1127 @@
+
+####################################################
+####get_reliable_co_expression_for Kidney cancer####
+####################################################
+
+
+####tumor####
+####*T_cell####
+#select co-expressed gene pairs
+library(foreach)
+library(doParallel)
+num_cores                          <- 4
+cl                                 <- makeCluster(num_cores)
+registerDoParallel(cl)
+dataset_list                       <- list("Obradovic2021","Zhang2021","Krishna2021")
+process_data_for_files             <- function(dataset_list) {
+  Tcell_matrix_list <- foreach ( dataset_id = dataset_list,.combine="c")%dopar% {
+    tryCatch({
+      cor_file_path                        <- paste0("~/Pro_CoExpression/output/data/3CA/Kidney/",dataset_id,"_Kidney/",dataset_id,"_tumor_CSCORE_cor.rds")
+      padj_file_path                       <- paste0("~/Pro_CoExpression/output/data/3CA/Kidney/",dataset_id,"_Kidney/",dataset_id,"_tumor_CSCORE_padj.rds")
+      Tcell_cor                         <- readRDS(cor_file_path)$T_cell
+      Tcell_padj                        <- readRDS(padj_file_path)$T_cell
+      Tcell_cor[Tcell_padj > 0.05]      <- 0
+      return(list(Tcell_cor))
+    },error=function(e){message(paste("Error processing dataset", dataset_id, ": ", e$message))
+    })
+  }
+  return(Tcell_matrix_list)
+}
+Tcell_matrix_list                      <- process_data_for_files(dataset_list)
+stopCluster(cl)
+Tcell_matrix_list                      <- Tcell_matrix_list[-1]
+names(Tcell_matrix_list)               <- unlist(dataset_list[-1])
+
+####Bi2021
+Bi2021_kidney_tumor_Tcell_CSCORE_cor   <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/Bi2021_Kidney/Bi2021_kidney_CSCORE_cor.rds")$T_cell
+Bi2021_kidney_tumor_Tcell_CSCORE_padj  <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/Bi2021_Kidney/Bi2021_kidney_CSCORE_padj.rds")$T_cell
+Bi2021_kidney_tumor_Tcell_CSCORE_cor[Bi2021_kidney_tumor_Tcell_CSCORE_padj > 0.05]  <- 0
+Tcell_matrix_list                      <- append(Tcell_matrix_list,list(Bi2021_kidney_tumor_Tcell_CSCORE_cor))
+
+####Young2018
+Young2018_kidney_tumor_Tcell_CSCORE_cor   <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/Young2018_Kidney/Young2018_kid_T_adults_RCC_CSCORE_cor.rds")$T_cell
+Young2018_kidney_tumor_Tcell_CSCORE_padj  <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/Young2018_Kidney/Young2018_kid_T_adults_RCC_CSCORE_padj.rds")$T_cell
+Young2018_kidney_tumor_Tcell_CSCORE_cor[Young2018_kidney_tumor_Tcell_CSCORE_padj  > 0.05]   <- 0
+Tcell_matrix_list                         <- append(Tcell_matrix_list,list(Young2018_kidney_tumor_Tcell_CSCORE_cor))
+names(Tcell_matrix_list)[3:4]             <- c("Bi2021","Young2018")
+
+####merge the resluts of all datasets
+library(dplyr)
+library(tidyr)
+cl                                 <- makeCluster(num_cores)
+registerDoParallel(cl)
+all_pairs                          <- foreach(mat = Tcell_matrix_list) %dopar% {
+  mat[lower.tri(mat)]              <- NA
+  temp_data       <- as.data.frame(which(!is.na(mat), arr.ind = TRUE))
+  temp_data$value <- mat[!is.na(mat)]
+  temp_data$gene1 <- rownames(mat)[temp_data$row]
+  temp_data$gene2 <- colnames(mat)[temp_data$col]
+  temp_data
+} 
+stopCluster(cl)
+all_pairs         <- do.call(rbind,all_pairs)
+#### Count the frequency of occurrence of each gene pair
+Tcell_tumor_Kidney_pair_counts <- all_pairs %>%
+  group_by(gene1, gene2) %>%
+  summarise(count = n(), median_value = median(value, na.rm = TRUE),.groups = "drop") %>%
+  filter(count >= 2)  # Select gene pairs that appear in at least two matrices
+saveRDS(Tcell_tumor_Kidney_pair_counts,file="Pro_CoExpression/output/data/3CA/Kidney/common_genesets/T_cell/Tcell_tumor_Kidney_pair_counts.rds")
+
+
+
+library(ggplot2)
+ggplot(Tcell_tumor_Kidney_pair_counts, aes(y = median_value)) + 
+  geom_boxplot(outlier.colour = "red", outlier.shape = 16, outlier.size = 1) +
+  theme_minimal()
+stats                 <- boxplot.stats(Tcell_tumor_Kidney_pair_counts$median_value)
+outlier               <- stats$out
+
+Q1                       <- quantile(Tcell_tumor_Kidney_pair_counts$median_value, 0.25)
+Q3                       <- quantile(Tcell_tumor_Kidney_pair_counts$median_value, 0.75)
+IQR                      <- Q3 - Q1
+threshold_1              <- Q3 + 1.5 * IQR #0
+threshold_2              <- Q1 - 1.5*IQR  #0
+Tcell_reliable_coexp     <- Tcell_tumor_Kidney_pair_counts[Tcell_tumor_Kidney_pair_counts$median_value > threshold_1 |
+                                                             Tcell_tumor_Kidney_pair_counts$median_value < threshold_2, ]
+Tcell_tumor_Kidney_reliable_coexp_df  <- Tcell_reliable_coexp
+#1450444
+saveRDS(Tcell_tumor_Kidney_reliable_coexp_df,file = "Pro_CoExpression/output/data/3CA/Kidney/common_genesets/T_cell/Tcell_tumor_Kidney_reliable_coexp_df.rds")
+####Convert data frame into matrixs
+library(data.table)
+genes                                         <- unique(c(Tcell_tumor_Kidney_reliable_coexp_df$gene1, Tcell_tumor_Kidney_reliable_coexp_df$gene2))
+corr_matrix                                   <- matrix(NA, nrow = length(genes), ncol = length(genes), dimnames = list(genes, genes))
+Tcell_tumor_Kidney_reliable_coexp_df_dt                     <- as.data.table(Tcell_tumor_Kidney_reliable_coexp_df)
+#Create an index mapping
+gene_index                                    <- setNames(seq_along(genes), genes)
+#Fill the correlation matrix with vectorization operation
+row_indices                                   <- gene_index[Tcell_tumor_Kidney_reliable_coexp_df_dt$gene1]
+col_indices                                   <- gene_index[Tcell_tumor_Kidney_reliable_coexp_df_dt$gene2]
+corr_matrix[cbind(row_indices, col_indices)]  <- Tcell_tumor_Kidney_reliable_coexp_df_dt$median_value
+corr_matrix[cbind(col_indices, row_indices)]  <- Tcell_tumor_Kidney_reliable_coexp_df_dt$median_value
+Tcell_tumor_Kidney_pair_corr_matrix                   <- corr_matrix
+Tcell_tumor_Kidney_pair_corr_matrix[is.na(Tcell_tumor_Kidney_pair_corr_matrix)] <- 0
+Tcell_tumor_Kidney_reliable_coexp_mat                 <- Tcell_tumor_Kidney_pair_corr_matrix
+saveRDS(Tcell_tumor_Kidney_reliable_coexp_mat,file="Pro_CoExpression/output/data/3CA/Kidney/common_genesets/T_cell/Tcell_tumor_Kidney_reliable_coexp_mat.rds")
+
+
+####*B_cell####
+#select co-expressed gene pairs
+library(foreach)
+library(doParallel)
+num_cores                          <- 4
+cl                                 <- makeCluster(num_cores)
+registerDoParallel(cl)
+dataset_list                       <- list("Obradovic2021","Zhang2021","Krishna2021")
+process_data_for_files             <- function(dataset_list) {
+  Bcell_matrix_list <- foreach ( dataset_id = dataset_list,.combine="c")%dopar% {
+    tryCatch({
+      cor_file_path                        <- paste0("~/Pro_CoExpression/output/data/3CA/Kidney/",dataset_id,"_Kidney/",dataset_id,"_tumor_CSCORE_cor.rds")
+      padj_file_path                       <- paste0("~/Pro_CoExpression/output/data/3CA/Kidney/",dataset_id,"_Kidney/",dataset_id,"_tumor_CSCORE_padj.rds")
+      Bcell_cor                         <- readRDS(cor_file_path)$B_cell
+      Bcell_padj                        <- readRDS(padj_file_path)$B_cell
+      Bcell_cor[Bcell_padj > 0.05]      <- 0
+      return(list(Bcell_cor))
+    },error=function(e){message(paste("Error processing dataset", dataset_id, ": ", e$message))
+    })
+  }
+  return(Bcell_matrix_list)
+}
+Bcell_matrix_list                      <- process_data_for_files(dataset_list)
+stopCluster(cl)
+Bcell_matrix_list                      <- Bcell_matrix_list[-1]
+names(Bcell_matrix_list)               <- unlist(dataset_list[-1])
+
+####Bi2021
+Bi2021_kidney_tumor_Bcell_CSCORE_cor   <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/Bi2021_Kidney/Bi2021_kidney_CSCORE_cor.rds")$B_cell
+Bi2021_kidney_tumor_Bcell_CSCORE_padj  <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/Bi2021_Kidney/Bi2021_kidney_CSCORE_padj.rds")$B_cell
+Bi2021_kidney_tumor_Bcell_CSCORE_cor[Bi2021_kidney_tumor_Bcell_CSCORE_padj > 0.05]  <- 0
+Bcell_matrix_list                      <- append(Bcell_matrix_list,list(Bi2021_kidney_tumor_Bcell_CSCORE_cor))
+
+####Young2018
+Young2018_kidney_tumor_Bcell_CSCORE_cor   <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/Young2018_Kidney/Young2018_kid_T_adults_RCC_CSCORE_cor.rds")$B_cell
+Young2018_kidney_tumor_Bcell_CSCORE_padj  <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/Young2018_Kidney/Young2018_kid_T_adults_RCC_CSCORE_padj.rds")$B_cell
+Young2018_kidney_tumor_Bcell_CSCORE_cor[Young2018_kidney_tumor_Bcell_CSCORE_padj  > 0.05]   <- 0
+Bcell_matrix_list                         <- append(Bcell_matrix_list,list(Young2018_kidney_tumor_Bcell_CSCORE_cor))
+names(Bcell_matrix_list)[3:4]             <- c("Bi2021","Young2018")
+
+####merge the resluts of all datasets
+library(dplyr)
+library(tidyr)
+cl                                 <- makeCluster(num_cores)
+registerDoParallel(cl)
+all_pairs                          <- foreach(mat = Bcell_matrix_list) %dopar% {
+  mat[lower.tri(mat)]              <- NA
+  temp_data       <- as.data.frame(which(!is.na(mat), arr.ind = TRUE))
+  temp_data$value <- mat[!is.na(mat)]
+  temp_data$gene1 <- rownames(mat)[temp_data$row]
+  temp_data$gene2 <- colnames(mat)[temp_data$col]
+  temp_data
+} 
+stopCluster(cl)
+all_pairs         <- do.call(rbind,all_pairs)
+#### Count the frequency of occurrence of each gene pair
+Bcell_tumor_Kidney_pair_counts <- all_pairs %>%
+  group_by(gene1, gene2) %>%
+  summarise(count = n(), median_value = median(value, na.rm = TRUE),.groups = "drop") %>%
+  filter(count >= 2)  # Select gene pairs that appear in at least two matrices
+saveRDS(Bcell_tumor_Kidney_pair_counts,file="Pro_CoExpression/output/data/3CA/Kidney/common_genesets/B_cell/Bcell_tumor_Kidney_pair_counts.rds")
+
+
+
+library(ggplot2)
+ggplot(Bcell_tumor_Kidney_pair_counts, aes(y = median_value)) + 
+  geom_boxplot(outlier.colour = "red", outlier.shape = 16, outlier.size = 1) +
+  theme_minimal()
+stats                 <- boxplot.stats(Bcell_tumor_Kidney_pair_counts$median_value)
+outlier               <- stats$out
+
+Q1                       <- quantile(Bcell_tumor_Kidney_pair_counts$median_value, 0.25)
+Q3                       <- quantile(Bcell_tumor_Kidney_pair_counts$median_value, 0.75)
+IQR                      <- Q3 - Q1
+threshold_1              <- Q3 + 1.5 * IQR #0
+threshold_2              <- Q1 - 1.5*IQR  #0
+Bcell_reliable_coexp     <- Bcell_tumor_Kidney_pair_counts[Bcell_tumor_Kidney_pair_counts$median_value > threshold_1 |
+                                                             Bcell_tumor_Kidney_pair_counts$median_value < threshold_2, ]
+Bcell_tumor_Kidney_reliable_coexp_df  <- Bcell_reliable_coexp
+#6863
+saveRDS(Bcell_tumor_Kidney_reliable_coexp_df,file = "Pro_CoExpression/output/data/3CA/Kidney/common_genesets/B_cell/Bcell_tumor_Kidney_reliable_coexp_df.rds")
+####Convert data frame into matrixs
+library(data.table)
+genes                                         <- unique(c(Bcell_tumor_Kidney_reliable_coexp_df$gene1, Bcell_tumor_Kidney_reliable_coexp_df$gene2))
+corr_matrix                                   <- matrix(NA, nrow = length(genes), ncol = length(genes), dimnames = list(genes, genes))
+Bcell_tumor_Kidney_reliable_coexp_df_dt                     <- as.data.table(Bcell_tumor_Kidney_reliable_coexp_df)
+#Create an index mapping
+gene_index                                    <- setNames(seq_along(genes), genes)
+#Fill the correlation matrix with vectorization operation
+row_indices                                   <- gene_index[Bcell_tumor_Kidney_reliable_coexp_df_dt$gene1]
+col_indices                                   <- gene_index[Bcell_tumor_Kidney_reliable_coexp_df_dt$gene2]
+corr_matrix[cbind(row_indices, col_indices)]  <- Bcell_tumor_Kidney_reliable_coexp_df_dt$median_value
+corr_matrix[cbind(col_indices, row_indices)]  <- Bcell_tumor_Kidney_reliable_coexp_df_dt$median_value
+Bcell_tumor_Kidney_pair_corr_matrix                   <- corr_matrix
+Bcell_tumor_Kidney_pair_corr_matrix[is.na(Bcell_tumor_Kidney_pair_corr_matrix)] <- 0
+Bcell_tumor_Kidney_reliable_coexp_mat                 <- Bcell_tumor_Kidney_pair_corr_matrix
+saveRDS(Bcell_tumor_Kidney_reliable_coexp_mat,file="Pro_CoExpression/output/data/3CA/Kidney/common_genesets/B_cell/Bcell_tumor_Kidney_reliable_coexp_mat.rds")
+
+####*Fibroblast：only one dataset####
+#select co-expressed gene pairs
+library(foreach)
+library(doParallel)
+num_cores                          <- 4
+cl                                 <- makeCluster(num_cores)
+registerDoParallel(cl)
+dataset_list                       <- list("Obradovic2021","Zhang2021","Krishna2021")
+process_data_for_files             <- function(dataset_list) {
+  Fibroblast_matrix_list <- foreach ( dataset_id = dataset_list,.combine="c")%dopar% {
+    tryCatch({
+      cor_file_path                        <- paste0("~/Pro_CoExpression/output/data/3CA/Kidney/",dataset_id,"_Kidney/",dataset_id,"_tumor_CSCORE_cor.rds")
+      padj_file_path                       <- paste0("~/Pro_CoExpression/output/data/3CA/Kidney/",dataset_id,"_Kidney/",dataset_id,"_tumor_CSCORE_padj.rds")
+      Fibroblast_cor                         <- readRDS(cor_file_path)$Fibroblast
+      Fibroblast_padj                        <- readRDS(padj_file_path)$Fibroblast
+      Fibroblast_cor[Fibroblast_padj > 0.05]      <- 0
+      return(list(Fibroblast_cor))
+    },error=function(e){message(paste("Error processing dataset", dataset_id, ": ", e$message))
+    })
+  }
+  return(Fibroblast_matrix_list)
+}
+Fibroblast_matrix_list                      <- process_data_for_files(dataset_list)
+stopCluster(cl)
+names(Fibroblast_matrix_list)               <- unlist(dataset_list)
+
+####merge the resluts of all datasets
+library(dplyr)
+library(tidyr)
+cl                                 <- makeCluster(num_cores)
+registerDoParallel(cl)
+all_pairs                          <- foreach(mat = Fibroblast_matrix_list) %dopar% {
+  mat[lower.tri(mat)]              <- NA
+  temp_data       <- as.data.frame(which(!is.na(mat), arr.ind = TRUE))
+  temp_data$value <- mat[!is.na(mat)]
+  temp_data$gene1 <- rownames(mat)[temp_data$row]
+  temp_data$gene2 <- colnames(mat)[temp_data$col]
+  temp_data
+} 
+stopCluster(cl)
+all_pairs         <- do.call(rbind,all_pairs)
+#### Count the frequency of occurrence of each gene pair
+Fibroblast_tumor_Kidney_pair_counts <- all_pairs %>%
+  group_by(gene1, gene2) %>%
+  summarise(count = n(), median_value = median(value, na.rm = TRUE),.groups = "drop")  # Select gene pairs that appear in at least two matrices
+range(Fibroblast_tumor_Kidney_pair_counts$count)
+saveRDS(Fibroblast_tumor_Kidney_pair_counts,file="Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Fibroblast/Fibroblast_tumor_Kidney_pair_counts.rds")
+
+
+
+library(ggplot2)
+ggplot(Fibroblast_tumor_Kidney_pair_counts, aes(y = median_value)) + 
+  geom_boxplot(outlier.colour = "red", outlier.shape = 16, outlier.size = 1) +
+  theme_minimal()
+stats                 <- boxplot.stats(Fibroblast_tumor_Kidney_pair_counts$median_value)
+outlier               <- stats$out
+
+Q1                       <- quantile(Fibroblast_tumor_Kidney_pair_counts$median_value, 0.25)
+Q3                       <- quantile(Fibroblast_tumor_Kidney_pair_counts$median_value, 0.75)
+IQR                      <- Q3 - Q1
+threshold_1              <- Q3 + 1.5 * IQR #0
+threshold_2              <- Q1 - 1.5*IQR  #0
+Fibroblast_reliable_coexp     <- Fibroblast_tumor_Kidney_pair_counts[Fibroblast_tumor_Kidney_pair_counts$median_value > threshold_1 |
+                                                                       Fibroblast_tumor_Kidney_pair_counts$median_value < threshold_2, ]
+Fibroblast_tumor_Kidney_reliable_coexp_df  <- Fibroblast_reliable_coexp
+#1020097
+saveRDS(Fibroblast_tumor_Kidney_reliable_coexp_df,file = "Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Fibroblast/Fibroblast_tumor_Kidney_reliable_coexp_df.rds")
+####Convert data frame into matrixs
+library(data.table)
+genes                                         <- unique(c(Fibroblast_tumor_Kidney_reliable_coexp_df$gene1, Fibroblast_tumor_Kidney_reliable_coexp_df$gene2))
+corr_matrix                                   <- matrix(NA, nrow = length(genes), ncol = length(genes), dimnames = list(genes, genes))
+Fibroblast_tumor_Kidney_reliable_coexp_df_dt                     <- as.data.table(Fibroblast_tumor_Kidney_reliable_coexp_df)
+#Create an index mapping
+gene_index                                    <- setNames(seq_along(genes), genes)
+#Fill the correlation matrix with vectorization operation
+row_indices                                   <- gene_index[Fibroblast_tumor_Kidney_reliable_coexp_df_dt$gene1]
+col_indices                                   <- gene_index[Fibroblast_tumor_Kidney_reliable_coexp_df_dt$gene2]
+corr_matrix[cbind(row_indices, col_indices)]  <- Fibroblast_tumor_Kidney_reliable_coexp_df_dt$median_value
+corr_matrix[cbind(col_indices, row_indices)]  <- Fibroblast_tumor_Kidney_reliable_coexp_df_dt$median_value
+Fibroblast_tumor_Kidney_pair_corr_matrix                   <- corr_matrix
+Fibroblast_tumor_Kidney_pair_corr_matrix[is.na(Fibroblast_tumor_Kidney_pair_corr_matrix)] <- 0
+Fibroblast_tumor_Kidney_reliable_coexp_mat                 <- Fibroblast_tumor_Kidney_pair_corr_matrix
+saveRDS(Fibroblast_tumor_Kidney_reliable_coexp_mat,file="Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Fibroblast/Fibroblast_tumor_Kidney_reliable_coexp_mat.rds")
+
+####*Endothelial####
+#select co-expressed gene pairs
+library(foreach)
+library(doParallel)
+num_cores                          <- 4
+cl                                 <- makeCluster(num_cores)
+registerDoParallel(cl)
+dataset_list                       <- list("Obradovic2021","Zhang2021","Krishna2021")
+process_data_for_files             <- function(dataset_list) {
+  Endothelial_matrix_list <- foreach ( dataset_id = dataset_list,.combine="c")%dopar% {
+    tryCatch({
+      cor_file_path                        <- paste0("~/Pro_CoExpression/output/data/3CA/Kidney/",dataset_id,"_Kidney/",dataset_id,"_tumor_CSCORE_cor.rds")
+      padj_file_path                       <- paste0("~/Pro_CoExpression/output/data/3CA/Kidney/",dataset_id,"_Kidney/",dataset_id,"_tumor_CSCORE_padj.rds")
+      Endothelial_cor                         <- readRDS(cor_file_path)$Endothelial
+      Endothelial_padj                        <- readRDS(padj_file_path)$Endothelial
+      Endothelial_cor[Endothelial_padj > 0.05]      <- 0
+      return(list(Endothelial_cor))
+    },error=function(e){message(paste("Error processing dataset", dataset_id, ": ", e$message))
+    })
+  }
+  return(Endothelial_matrix_list)
+}
+Endothelial_matrix_list                      <- process_data_for_files(dataset_list)
+stopCluster(cl)
+names(Endothelial_matrix_list)               <- unlist(dataset_list)
+
+####Bi2021
+Bi2021_kidney_tumor_Endothelial_CSCORE_cor   <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/Bi2021_Kidney/Bi2021_kidney_CSCORE_cor.rds")$Endothelial
+Bi2021_kidney_tumor_Endothelial_CSCORE_padj  <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/Bi2021_Kidney/Bi2021_kidney_CSCORE_padj.rds")$Endothelial
+Bi2021_kidney_tumor_Endothelial_CSCORE_cor[Bi2021_kidney_tumor_Endothelial_CSCORE_padj > 0.05]  <- 0
+Endothelial_matrix_list                      <- append(Endothelial_matrix_list,list(Bi2021_kidney_tumor_Endothelial_CSCORE_cor))
+
+####Young2018
+Young2018_kidney_tumor_Endothelial_CSCORE_cor   <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/Young2018_Kidney/Young2018_kid_T_adults_RCC_CSCORE_cor.rds")$Endothelial
+Young2018_kidney_tumor_Endothelial_CSCORE_padj  <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/Young2018_Kidney/Young2018_kid_T_adults_RCC_CSCORE_padj.rds")$Endothelial
+Young2018_kidney_tumor_Endothelial_CSCORE_cor[Young2018_kidney_tumor_Endothelial_CSCORE_padj  > 0.05]   <- 0
+Endothelial_matrix_list                         <- append(Endothelial_matrix_list,list(Young2018_kidney_tumor_Endothelial_CSCORE_cor))
+names(Endothelial_matrix_list)[4:5]             <- c("Bi2021","Young2018")
+
+####merge the resluts of all datasets
+library(dplyr)
+library(tidyr)
+cl                                 <- makeCluster(num_cores)
+registerDoParallel(cl)
+all_pairs                          <- foreach(mat = Endothelial_matrix_list) %dopar% {
+  mat[lower.tri(mat)]              <- NA
+  temp_data       <- as.data.frame(which(!is.na(mat), arr.ind = TRUE))
+  temp_data$value <- mat[!is.na(mat)]
+  temp_data$gene1 <- rownames(mat)[temp_data$row]
+  temp_data$gene2 <- colnames(mat)[temp_data$col]
+  temp_data
+} 
+stopCluster(cl)
+all_pairs         <- do.call(rbind,all_pairs)
+#### Count the frequency of occurrence of each gene pair
+Endothelial_tumor_Kidney_pair_counts <- all_pairs %>%
+  group_by(gene1, gene2) %>%
+  summarise(count = n(), median_value = median(value, na.rm = TRUE),.groups = "drop") %>%
+  filter(count >= 2)  # Select gene pairs that appear in at least two matrices
+saveRDS(Endothelial_tumor_Kidney_pair_counts,file="Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Endothelial/Endothelial_tumor_Kidney_pair_counts.rds")
+
+
+
+library(ggplot2)
+ggplot(Endothelial_tumor_Kidney_pair_counts, aes(y = median_value)) + 
+  geom_boxplot(outlier.colour = "red", outlier.shape = 16, outlier.size = 1) +
+  theme_minimal()
+stats                 <- boxplot.stats(Endothelial_tumor_Kidney_pair_counts$median_value)
+outlier               <- stats$out
+
+Q1                       <- quantile(Endothelial_tumor_Kidney_pair_counts$median_value, 0.25)
+Q3                       <- quantile(Endothelial_tumor_Kidney_pair_counts$median_value, 0.75)
+IQR                      <- Q3 - Q1
+threshold_1              <- Q3 + 1.5 * IQR #0
+threshold_2              <- Q1 - 1.5*IQR  #0
+Endothelial_reliable_coexp     <- Endothelial_tumor_Kidney_pair_counts[Endothelial_tumor_Kidney_pair_counts$median_value > threshold_1 |
+                                                                         Endothelial_tumor_Kidney_pair_counts$median_value < threshold_2, ]
+Endothelial_tumor_Kidney_reliable_coexp_df  <- Endothelial_reliable_coexp
+#758353
+saveRDS(Endothelial_tumor_Kidney_reliable_coexp_df,file = "Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Endothelial/Endothelial_tumor_Kidney_reliable_coexp_df.rds")
+####Convert data frame into matrixs
+library(data.table)
+genes                                         <- unique(c(Endothelial_tumor_Kidney_reliable_coexp_df$gene1, Endothelial_tumor_Kidney_reliable_coexp_df$gene2))
+corr_matrix                                   <- matrix(NA, nrow = length(genes), ncol = length(genes), dimnames = list(genes, genes))
+Endothelial_tumor_Kidney_reliable_coexp_df_dt                     <- as.data.table(Endothelial_tumor_Kidney_reliable_coexp_df)
+#Create an index mapping
+gene_index                                    <- setNames(seq_along(genes), genes)
+#Fill the correlation matrix with vectorization operation
+row_indices                                   <- gene_index[Endothelial_tumor_Kidney_reliable_coexp_df_dt$gene1]
+col_indices                                   <- gene_index[Endothelial_tumor_Kidney_reliable_coexp_df_dt$gene2]
+corr_matrix[cbind(row_indices, col_indices)]  <- Endothelial_tumor_Kidney_reliable_coexp_df_dt$median_value
+corr_matrix[cbind(col_indices, row_indices)]  <- Endothelial_tumor_Kidney_reliable_coexp_df_dt$median_value
+Endothelial_tumor_Kidney_pair_corr_matrix                   <- corr_matrix
+Endothelial_tumor_Kidney_pair_corr_matrix[is.na(Endothelial_tumor_Kidney_pair_corr_matrix)] <- 0
+Endothelial_tumor_Kidney_reliable_coexp_mat                 <- Endothelial_tumor_Kidney_pair_corr_matrix
+saveRDS(Endothelial_tumor_Kidney_reliable_coexp_mat,file="Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Endothelial/Endothelial_tumor_Kidney_reliable_coexp_mat.rds")
+
+####*Macrophage####
+#select co-expressed gene pairs
+library(foreach)
+library(doParallel)
+num_cores                          <- 4
+cl                                 <- makeCluster(num_cores)
+registerDoParallel(cl)
+dataset_list                       <- list("Obradovic2021","Zhang2021","Krishna2021")
+process_data_for_files             <- function(dataset_list) {
+  Macrophage_matrix_list <- foreach ( dataset_id = dataset_list,.combine="c")%dopar% {
+    tryCatch({
+      cor_file_path                        <- paste0("~/Pro_CoExpression/output/data/3CA/Kidney/",dataset_id,"_Kidney/",dataset_id,"_tumor_CSCORE_cor.rds")
+      padj_file_path                       <- paste0("~/Pro_CoExpression/output/data/3CA/Kidney/",dataset_id,"_Kidney/",dataset_id,"_tumor_CSCORE_padj.rds")
+      Macrophage_cor                         <- readRDS(cor_file_path)$Macrophage
+      Macrophage_padj                        <- readRDS(padj_file_path)$Macrophage
+      Macrophage_cor[Macrophage_padj > 0.05]      <- 0
+      return(list(Macrophage_cor))
+    },error=function(e){message(paste("Error processing dataset", dataset_id, ": ", e$message))
+    })
+  }
+  return(Macrophage_matrix_list)
+}
+Macrophage_matrix_list                      <- process_data_for_files(dataset_list)
+stopCluster(cl)
+Macrophage_matrix_list                      <- Macrophage_matrix_list[-1]
+names(Macrophage_matrix_list)               <- unlist(dataset_list[-1])
+
+####Bi2021
+Bi2021_kidney_tumor_Macrophage_CSCORE_cor      <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/Bi2021_Kidney/Bi2021_kidney_CSCORE_cor.rds")$Macrophage
+Bi2021_kidney_tumor_Macrophage_CSCORE_padj     <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/Bi2021_Kidney/Bi2021_kidney_CSCORE_padj.rds")$Macrophage
+Bi2021_kidney_tumor_Macrophage_CSCORE_cor[Bi2021_kidney_tumor_Macrophage_CSCORE_padj > 0.05]  <- 0
+Macrophage_matrix_list                         <- append(Macrophage_matrix_list,list(Bi2021_kidney_tumor_Macrophage_CSCORE_cor))
+
+####Young2018
+Young2018_kidney_tumor_Macrophage_CSCORE_cor   <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/Young2018_Kidney/Young2018_kid_T_adults_RCC_CSCORE_cor.rds")$Macrophage
+Young2018_kidney_tumor_Macrophage_CSCORE_padj  <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/Young2018_Kidney/Young2018_kid_T_adults_RCC_CSCORE_padj.rds")$Macrophage
+Young2018_kidney_tumor_Macrophage_CSCORE_cor[Young2018_kidney_tumor_Macrophage_CSCORE_padj  > 0.05]   <- 0
+Macrophage_matrix_list                         <- append(Macrophage_matrix_list,list(Young2018_kidney_tumor_Macrophage_CSCORE_cor))
+names(Macrophage_matrix_list)[3:4]             <- c("Bi2021","Young2018")
+
+####merge the resluts of all datasets
+library(dplyr)
+library(tidyr)
+cl                                 <- makeCluster(num_cores)
+registerDoParallel(cl)
+all_pairs                          <- foreach(mat = Macrophage_matrix_list) %dopar% {
+  mat[lower.tri(mat)]              <- NA
+  temp_data       <- as.data.frame(which(!is.na(mat), arr.ind = TRUE))
+  temp_data$value <- mat[!is.na(mat)]
+  temp_data$gene1 <- rownames(mat)[temp_data$row]
+  temp_data$gene2 <- colnames(mat)[temp_data$col]
+  temp_data
+} 
+stopCluster(cl)
+all_pairs         <- do.call(rbind,all_pairs)
+#### Count the frequency of occurrence of each gene pair
+Macrophage_tumor_Kidney_pair_counts <- all_pairs %>%
+  group_by(gene1, gene2) %>%
+  summarise(count = n(), median_value = median(value, na.rm = TRUE),.groups = "drop") %>%
+  filter(count >= 2)  # Select gene pairs that appear in at least two matrices
+saveRDS(Macrophage_tumor_Kidney_pair_counts,file="Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Macrophage/Macrophage_tumor_Kidney_pair_counts.rds")
+
+
+
+library(ggplot2)
+ggplot(Macrophage_tumor_Kidney_pair_counts, aes(y = median_value)) + 
+  geom_boxplot(outlier.colour = "red", outlier.shape = 16, outlier.size = 1) +
+  theme_minimal()
+stats                 <- boxplot.stats(Macrophage_tumor_Kidney_pair_counts$median_value)
+outlier               <- stats$out
+
+Q1                       <- quantile(Macrophage_tumor_Kidney_pair_counts$median_value, 0.25)
+Q3                       <- quantile(Macrophage_tumor_Kidney_pair_counts$median_value, 0.75)
+IQR                      <- Q3 - Q1
+threshold_1              <- Q3 + 1.5 * IQR #0
+threshold_2              <- Q1 - 1.5*IQR  #0
+Macrophage_reliable_coexp     <- Macrophage_tumor_Kidney_pair_counts[Macrophage_tumor_Kidney_pair_counts$median_value > threshold_1 |
+                                                                       Macrophage_tumor_Kidney_pair_counts$median_value < threshold_2, ]
+Macrophage_tumor_Kidney_reliable_coexp_df  <- Macrophage_reliable_coexp
+#1949105
+saveRDS(Macrophage_tumor_Kidney_reliable_coexp_df,file = "Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Macrophage/Macrophage_tumor_Kidney_reliable_coexp_df.rds")
+####Convert data frame into matrixs
+library(data.table)
+genes                                         <- unique(c(Macrophage_tumor_Kidney_reliable_coexp_df$gene1, Macrophage_tumor_Kidney_reliable_coexp_df$gene2))
+corr_matrix                                   <- matrix(NA, nrow = length(genes), ncol = length(genes), dimnames = list(genes, genes))
+Macrophage_tumor_Kidney_reliable_coexp_df_dt                     <- as.data.table(Macrophage_tumor_Kidney_reliable_coexp_df)
+#Create an index mapping
+gene_index                                    <- setNames(seq_along(genes), genes)
+#Fill the correlation matrix with vectorization operation
+row_indices                                   <- gene_index[Macrophage_tumor_Kidney_reliable_coexp_df_dt$gene1]
+col_indices                                   <- gene_index[Macrophage_tumor_Kidney_reliable_coexp_df_dt$gene2]
+corr_matrix[cbind(row_indices, col_indices)]  <- Macrophage_tumor_Kidney_reliable_coexp_df_dt$median_value
+corr_matrix[cbind(col_indices, row_indices)]  <- Macrophage_tumor_Kidney_reliable_coexp_df_dt$median_value
+Macrophage_tumor_Kidney_pair_corr_matrix                   <- corr_matrix
+Macrophage_tumor_Kidney_pair_corr_matrix[is.na(Macrophage_tumor_Kidney_pair_corr_matrix)] <- 0
+Macrophage_tumor_Kidney_reliable_coexp_mat                 <- Macrophage_tumor_Kidney_pair_corr_matrix
+saveRDS(Macrophage_tumor_Kidney_reliable_coexp_mat,file="Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Macrophage/Macrophage_tumor_Kidney_reliable_coexp_mat.rds")
+
+####*Malignant####
+#select co-expressed gene pairs
+library(foreach)
+library(doParallel)
+num_cores                          <- 4
+cl                                 <- makeCluster(num_cores)
+registerDoParallel(cl)
+dataset_list                       <- list("Obradovic2021","Zhang2021","Krishna2021")
+process_data_for_files             <- function(dataset_list) {
+  Malignant_matrix_list <- foreach ( dataset_id = dataset_list,.combine="c")%dopar% {
+    tryCatch({
+      cor_file_path                        <- paste0("~/Pro_CoExpression/output/data/3CA/Kidney/",dataset_id,"_Kidney/",dataset_id,"_tumor_CSCORE_cor.rds")
+      padj_file_path                       <- paste0("~/Pro_CoExpression/output/data/3CA/Kidney/",dataset_id,"_Kidney/",dataset_id,"_tumor_CSCORE_padj.rds")
+      Malignant_cor                         <- readRDS(cor_file_path)$Malignant
+      Malignant_padj                        <- readRDS(padj_file_path)$Malignant
+      Malignant_cor[Malignant_padj > 0.05]      <- 0
+      return(list(Malignant_cor))
+    },error=function(e){message(paste("Error processing dataset", dataset_id, ": ", e$message))
+    })
+  }
+  return(Malignant_matrix_list)
+}
+Malignant_matrix_list                      <- process_data_for_files(dataset_list)
+stopCluster(cl)
+names(Malignant_matrix_list)               <- unlist(dataset_list)
+
+####Bi2021
+Bi2021_kidney_tumor_Malignant_CSCORE_cor   <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/Bi2021_Kidney/Bi2021_kidney_CSCORE_cor.rds")$Malignant
+Bi2021_kidney_tumor_Malignant_CSCORE_padj  <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/Bi2021_Kidney/Bi2021_kidney_CSCORE_padj.rds")$Malignant
+Bi2021_kidney_tumor_Malignant_CSCORE_cor[Bi2021_kidney_tumor_Malignant_CSCORE_padj > 0.05]  <- 0
+Malignant_matrix_list                      <- append(Malignant_matrix_list,list(Bi2021_kidney_tumor_Malignant_CSCORE_cor))
+
+####Young2018
+Young2018_kidney_tumor_Malignant_CSCORE_cor   <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/Young2018_Kidney/Young2018_kid_T_adults_RCC_CSCORE_cor.rds")$Malignant
+Young2018_kidney_tumor_Malignant_CSCORE_padj  <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/Young2018_Kidney/Young2018_kid_T_adults_RCC_CSCORE_padj.rds")$Malignant
+Young2018_kidney_tumor_Malignant_CSCORE_cor[Young2018_kidney_tumor_Malignant_CSCORE_padj  > 0.05]   <- 0
+Malignant_matrix_list                         <- append(Malignant_matrix_list,list(Young2018_kidney_tumor_Malignant_CSCORE_cor))
+names(Malignant_matrix_list)[4:5]             <- c("Bi2021","Young2018")
+
+####merge the resluts of all datasets
+library(dplyr)
+library(tidyr)
+cl                                 <- makeCluster(num_cores)
+registerDoParallel(cl)
+all_pairs                          <- foreach(mat = Malignant_matrix_list) %dopar% {
+  mat[lower.tri(mat)]              <- NA
+  temp_data       <- as.data.frame(which(!is.na(mat), arr.ind = TRUE))
+  temp_data$value <- mat[!is.na(mat)]
+  temp_data$gene1 <- rownames(mat)[temp_data$row]
+  temp_data$gene2 <- colnames(mat)[temp_data$col]
+  temp_data
+} 
+stopCluster(cl)
+all_pairs         <- do.call(rbind,all_pairs)
+#### Count the frequency of occurrence of each gene pair
+Malignant_tumor_Kidney_pair_counts <- all_pairs %>%
+  group_by(gene1, gene2) %>%
+  summarise(count = n(), median_value = median(value, na.rm = TRUE),.groups = "drop") %>%
+  filter(count >= 2)  # Select gene pairs that appear in at least two matrices
+saveRDS(Malignant_tumor_Kidney_pair_counts,file="Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Malignant/Malignant_tumor_Kidney_pair_counts.rds")
+
+
+
+library(ggplot2)
+ggplot(Malignant_tumor_Kidney_pair_counts, aes(y = median_value)) + 
+  geom_boxplot(outlier.colour = "red", outlier.shape = 16, outlier.size = 1) +
+  theme_minimal()
+stats                 <- boxplot.stats(Malignant_tumor_Kidney_pair_counts$median_value)
+outlier               <- stats$out
+
+Q1                       <- quantile(Malignant_tumor_Kidney_pair_counts$median_value, 0.25)
+Q3                       <- quantile(Malignant_tumor_Kidney_pair_counts$median_value, 0.75)
+IQR                      <- Q3 - Q1
+threshold_1              <- Q3 + 1.5 * IQR #0
+threshold_2              <- Q1 - 1.5*IQR  #0
+Malignant_reliable_coexp     <- Malignant_tumor_Kidney_pair_counts[Malignant_tumor_Kidney_pair_counts$median_value > threshold_1 |
+                                                                     Malignant_tumor_Kidney_pair_counts$median_value < threshold_2, ]
+Malignant_tumor_Kidney_reliable_coexp_df  <- Malignant_reliable_coexp
+#9060067
+saveRDS(Malignant_tumor_Kidney_reliable_coexp_df,file = "Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Malignant/Malignant_tumor_Kidney_reliable_coexp_df.rds")
+####Convert data frame into matrixs
+library(data.table)
+genes                                         <- unique(c(Malignant_tumor_Kidney_reliable_coexp_df$gene1, Malignant_tumor_Kidney_reliable_coexp_df$gene2))
+corr_matrix                                   <- matrix(NA, nrow = length(genes), ncol = length(genes), dimnames = list(genes, genes))
+Malignant_tumor_Kidney_reliable_coexp_df_dt                     <- as.data.table(Malignant_tumor_Kidney_reliable_coexp_df)
+#Create an index mapping
+gene_index                                    <- setNames(seq_along(genes), genes)
+#Fill the correlation matrix with vectorization operation
+row_indices                                   <- gene_index[Malignant_tumor_Kidney_reliable_coexp_df_dt$gene1]
+col_indices                                   <- gene_index[Malignant_tumor_Kidney_reliable_coexp_df_dt$gene2]
+corr_matrix[cbind(row_indices, col_indices)]  <- Malignant_tumor_Kidney_reliable_coexp_df_dt$median_value
+corr_matrix[cbind(col_indices, row_indices)]  <- Malignant_tumor_Kidney_reliable_coexp_df_dt$median_value
+Malignant_tumor_Kidney_pair_corr_matrix                   <- corr_matrix
+Malignant_tumor_Kidney_pair_corr_matrix[is.na(Malignant_tumor_Kidney_pair_corr_matrix)] <- 0
+Malignant_tumor_Kidney_reliable_coexp_mat                 <- Malignant_tumor_Kidney_pair_corr_matrix
+saveRDS(Malignant_tumor_Kidney_reliable_coexp_mat,file="Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Malignant/Malignant_tumor_Kidney_reliable_coexp_mat.rds")
+
+
+####normal####
+####*T_cell####
+#select co-expressed gene pairs
+library(foreach)
+library(doParallel)
+num_cores                          <- 4
+cl                                 <- makeCluster(num_cores)
+registerDoParallel(cl)
+dataset_list                       <- list("Obradovic2021","Zhang2021","Krishna2021")
+process_data_for_files             <- function(dataset_list) {
+  Tcell_matrix_list <- foreach ( dataset_id = dataset_list,.combine="c")%dopar% {
+    tryCatch({
+      cor_file_path                        <- paste0("~/Pro_CoExpression/output/data/3CA/Kidney/",dataset_id,"_Kidney/",dataset_id,"_normal_CSCORE_cor.rds")
+      padj_file_path                       <- paste0("~/Pro_CoExpression/output/data/3CA/Kidney/",dataset_id,"_Kidney/",dataset_id,"_normal_CSCORE_padj.rds")
+      Tcell_cor                         <- readRDS(cor_file_path)$T_cell
+      Tcell_padj                        <- readRDS(padj_file_path)$T_cell
+      Tcell_cor[Tcell_padj > 0.05]      <- 0
+      return(list(Tcell_cor))
+    },error=function(e){message(paste("Error processing dataset", dataset_id, ": ", e$message))
+    })
+  }
+  return(Tcell_matrix_list)
+}
+Tcell_matrix_list                      <- process_data_for_files(dataset_list)
+stopCluster(cl)
+Tcell_matrix_list                      <- Tcell_matrix_list[-1]
+names(Tcell_matrix_list)               <- unlist(dataset_list[-1])
+
+####Young2018
+Young2018_kidney_normal_Tcell_CSCORE_cor   <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/Young2018_Kidney/Young2018_kid_N_adults_RCC_CSCORE_cor.rds")$T_cell
+Young2018_kidney_normal_Tcell_CSCORE_padj  <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/Young2018_Kidney/Young2018_kid_N_adults_RCC_CSCORE_padj.rds")$T_cell
+Young2018_kidney_normal_Tcell_CSCORE_cor[Young2018_kidney_normal_Tcell_CSCORE_padj  > 0.05]   <- 0
+Tcell_matrix_list                         <- append(Tcell_matrix_list,list(Young2018_kidney_normal_Tcell_CSCORE_cor))
+names(Tcell_matrix_list)[3]             <- c("Young2018")
+
+####merge the resluts of all datasets
+library(dplyr)
+library(tidyr)
+cl                                 <- makeCluster(num_cores)
+registerDoParallel(cl)
+all_pairs                          <- foreach(mat = Tcell_matrix_list) %dopar% {
+  mat[lower.tri(mat)]              <- NA
+  temp_data       <- as.data.frame(which(!is.na(mat), arr.ind = TRUE))
+  temp_data$value <- mat[!is.na(mat)]
+  temp_data$gene1 <- rownames(mat)[temp_data$row]
+  temp_data$gene2 <- colnames(mat)[temp_data$col]
+  temp_data
+} 
+stopCluster(cl)
+all_pairs         <- do.call(rbind,all_pairs)
+#### Count the frequency of occurrence of each gene pair
+Tcell_normal_Kidney_pair_counts <- all_pairs %>%
+  group_by(gene1, gene2) %>%
+  summarise(count = n(), median_value = median(value, na.rm = TRUE),.groups = "drop") %>%
+  filter(count >= 2)  # Select gene pairs that appear in at least two matrices
+saveRDS(Tcell_normal_Kidney_pair_counts,file="Pro_CoExpression/output/data/3CA/Kidney/common_genesets/T_cell/Tcell_normal_Kidney_pair_counts.rds")
+
+
+
+library(ggplot2)
+ggplot(Tcell_normal_Kidney_pair_counts, aes(y = median_value)) + 
+  geom_boxplot(outlier.colour = "red", outlier.shape = 16, outlier.size = 1) +
+  theme_minimal()
+stats                 <- boxplot.stats(Tcell_normal_Kidney_pair_counts$median_value)
+outlier               <- stats$out
+
+Q1                       <- quantile(Tcell_normal_Kidney_pair_counts$median_value, 0.25)
+Q3                       <- quantile(Tcell_normal_Kidney_pair_counts$median_value, 0.75)
+IQR                      <- Q3 - Q1
+threshold_1              <- Q3 + 1.5 * IQR #0
+threshold_2              <- Q1 - 1.5*IQR  #0
+Tcell_reliable_coexp     <- Tcell_normal_Kidney_pair_counts[Tcell_normal_Kidney_pair_counts$median_value > threshold_1 |
+                                                              Tcell_normal_Kidney_pair_counts$median_value < threshold_2, ]
+Tcell_normal_Kidney_reliable_coexp_df  <- Tcell_reliable_coexp
+#347714
+saveRDS(Tcell_normal_Kidney_reliable_coexp_df,file = "Pro_CoExpression/output/data/3CA/Kidney/common_genesets/T_cell/Tcell_normal_Kidney_reliable_coexp_df.rds")
+####Convert data frame into matrixs
+library(data.table)
+genes                                         <- unique(c(Tcell_normal_Kidney_reliable_coexp_df$gene1, Tcell_normal_Kidney_reliable_coexp_df$gene2))
+corr_matrix                                   <- matrix(NA, nrow = length(genes), ncol = length(genes), dimnames = list(genes, genes))
+Tcell_normal_Kidney_reliable_coexp_df_dt                     <- as.data.table(Tcell_normal_Kidney_reliable_coexp_df)
+#Create an index mapping
+gene_index                                    <- setNames(seq_along(genes), genes)
+#Fill the correlation matrix with vectorization operation
+row_indices                                   <- gene_index[Tcell_normal_Kidney_reliable_coexp_df_dt$gene1]
+col_indices                                   <- gene_index[Tcell_normal_Kidney_reliable_coexp_df_dt$gene2]
+corr_matrix[cbind(row_indices, col_indices)]  <- Tcell_normal_Kidney_reliable_coexp_df_dt$median_value
+corr_matrix[cbind(col_indices, row_indices)]  <- Tcell_normal_Kidney_reliable_coexp_df_dt$median_value
+Tcell_normal_Kidney_pair_corr_matrix                   <- corr_matrix
+Tcell_normal_Kidney_pair_corr_matrix[is.na(Tcell_normal_Kidney_pair_corr_matrix)] <- 0
+Tcell_normal_Kidney_reliable_coexp_mat                 <- Tcell_normal_Kidney_pair_corr_matrix
+saveRDS(Tcell_normal_Kidney_reliable_coexp_mat,file="Pro_CoExpression/output/data/3CA/Kidney/common_genesets/T_cell/Tcell_normal_Kidney_reliable_coexp_mat.rds")
+
+####*B_cell####
+#select co-expressed gene pairs
+library(foreach)
+library(doParallel)
+num_cores                          <- 4
+cl                                 <- makeCluster(num_cores)
+registerDoParallel(cl)
+dataset_list                       <- list("Obradovic2021","Zhang2021","Krishna2021")
+process_data_for_files             <- function(dataset_list) {
+  Bcell_matrix_list <- foreach ( dataset_id = dataset_list,.combine="c")%dopar% {
+    tryCatch({
+      cor_file_path                        <- paste0("~/Pro_CoExpression/output/data/3CA/Kidney/",dataset_id,"_Kidney/",dataset_id,"_normal_CSCORE_cor.rds")
+      padj_file_path                       <- paste0("~/Pro_CoExpression/output/data/3CA/Kidney/",dataset_id,"_Kidney/",dataset_id,"_normal_CSCORE_padj.rds")
+      Bcell_cor                         <- readRDS(cor_file_path)$B_cell
+      Bcell_padj                        <- readRDS(padj_file_path)$B_cell
+      Bcell_cor[Bcell_padj > 0.05]      <- 0
+      return(list(Bcell_cor))
+    },error=function(e){message(paste("Error processing dataset", dataset_id, ": ", e$message))
+    })
+  }
+  return(Bcell_matrix_list)
+}
+Bcell_matrix_list                      <- process_data_for_files(dataset_list)
+stopCluster(cl)
+Bcell_matrix_list                      <- Bcell_matrix_list[-1]
+names(Bcell_matrix_list)               <- unlist(dataset_list[-1])
+
+
+####Young2018
+Young2018_kidney_normal_Bcell_CSCORE_cor   <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/Young2018_Kidney/Young2018_kid_N_adults_RCC_CSCORE_cor.rds")$B_cell
+Young2018_kidney_normal_Bcell_CSCORE_padj  <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/Young2018_Kidney/Young2018_kid_N_adults_RCC_CSCORE_padj.rds")$B_cell
+Young2018_kidney_normal_Bcell_CSCORE_cor[Young2018_kidney_normal_Bcell_CSCORE_padj  > 0.05]   <- 0
+Bcell_matrix_list                         <- append(Bcell_matrix_list,list(Young2018_kidney_normal_Bcell_CSCORE_cor))
+names(Bcell_matrix_list)[3]             <- c("Young2018")
+
+####merge the resluts of all datasets
+library(dplyr)
+library(tidyr)
+cl                                 <- makeCluster(num_cores)
+registerDoParallel(cl)
+all_pairs                          <- foreach(mat = Bcell_matrix_list) %dopar% {
+  mat[lower.tri(mat)]              <- NA
+  temp_data       <- as.data.frame(which(!is.na(mat), arr.ind = TRUE))
+  temp_data$value <- mat[!is.na(mat)]
+  temp_data$gene1 <- rownames(mat)[temp_data$row]
+  temp_data$gene2 <- colnames(mat)[temp_data$col]
+  temp_data
+} 
+stopCluster(cl)
+all_pairs         <- do.call(rbind,all_pairs)
+#### Count the frequency of occurrence of each gene pair
+Bcell_normal_Kidney_pair_counts <- all_pairs %>%
+  group_by(gene1, gene2) %>%
+  summarise(count = n(), median_value = median(value, na.rm = TRUE),.groups = "drop") %>%
+  filter(count >= 2)  # Select gene pairs that appear in at least two matrices
+saveRDS(Bcell_normal_Kidney_pair_counts,file="Pro_CoExpression/output/data/3CA/Kidney/common_genesets/B_cell/Bcell_normal_Kidney_pair_counts.rds")
+
+
+
+library(ggplot2)
+ggplot(Bcell_normal_Kidney_pair_counts, aes(y = median_value)) + 
+  geom_boxplot(outlier.colour = "red", outlier.shape = 16, outlier.size = 1) +
+  theme_minimal()
+stats                 <- boxplot.stats(Bcell_normal_Kidney_pair_counts$median_value)
+outlier               <- stats$out
+
+Q1                       <- quantile(Bcell_normal_Kidney_pair_counts$median_value, 0.25)
+Q3                       <- quantile(Bcell_normal_Kidney_pair_counts$median_value, 0.75)
+IQR                      <- Q3 - Q1
+threshold_1              <- Q3 + 1.5 * IQR #0
+threshold_2              <- Q1 - 1.5*IQR  #0
+Bcell_reliable_coexp     <- Bcell_normal_Kidney_pair_counts[Bcell_normal_Kidney_pair_counts$median_value > threshold_1 |
+                                                              Bcell_normal_Kidney_pair_counts$median_value < threshold_2, ]
+Bcell_normal_Kidney_reliable_coexp_df  <- Bcell_reliable_coexp
+#85015
+saveRDS(Bcell_normal_Kidney_reliable_coexp_df,file = "Pro_CoExpression/output/data/3CA/Kidney/common_genesets/B_cell/Bcell_normal_Kidney_reliable_coexp_df.rds")
+####Convert data frame into matrixs
+library(data.table)
+genes                                         <- unique(c(Bcell_normal_Kidney_reliable_coexp_df$gene1, Bcell_normal_Kidney_reliable_coexp_df$gene2))
+corr_matrix                                   <- matrix(NA, nrow = length(genes), ncol = length(genes), dimnames = list(genes, genes))
+Bcell_normal_Kidney_reliable_coexp_df_dt                     <- as.data.table(Bcell_normal_Kidney_reliable_coexp_df)
+#Create an index mapping
+gene_index                                    <- setNames(seq_along(genes), genes)
+#Fill the correlation matrix with vectorization operation
+row_indices                                   <- gene_index[Bcell_normal_Kidney_reliable_coexp_df_dt$gene1]
+col_indices                                   <- gene_index[Bcell_normal_Kidney_reliable_coexp_df_dt$gene2]
+corr_matrix[cbind(row_indices, col_indices)]  <- Bcell_normal_Kidney_reliable_coexp_df_dt$median_value
+corr_matrix[cbind(col_indices, row_indices)]  <- Bcell_normal_Kidney_reliable_coexp_df_dt$median_value
+Bcell_normal_Kidney_pair_corr_matrix                   <- corr_matrix
+Bcell_normal_Kidney_pair_corr_matrix[is.na(Bcell_normal_Kidney_pair_corr_matrix)] <- 0
+Bcell_normal_Kidney_reliable_coexp_mat                 <- Bcell_normal_Kidney_pair_corr_matrix
+saveRDS(Bcell_normal_Kidney_reliable_coexp_mat,file="Pro_CoExpression/output/data/3CA/Kidney/common_genesets/B_cell/Bcell_normal_Kidney_reliable_coexp_mat.rds")
+
+####*Fibroblast：only one dataset####
+#select co-expressed gene pairs
+library(foreach)
+library(doParallel)
+num_cores                          <- 4
+cl                                 <- makeCluster(num_cores)
+registerDoParallel(cl)
+dataset_list                       <- list("Obradovic2021","Zhang2021","Krishna2021")
+process_data_for_files             <- function(dataset_list) {
+  Fibroblast_matrix_list <- foreach ( dataset_id = dataset_list,.combine="c")%dopar% {
+    tryCatch({
+      cor_file_path                        <- paste0("~/Pro_CoExpression/output/data/3CA/Kidney/",dataset_id,"_Kidney/",dataset_id,"_normal_CSCORE_cor.rds")
+      padj_file_path                       <- paste0("~/Pro_CoExpression/output/data/3CA/Kidney/",dataset_id,"_Kidney/",dataset_id,"_normal_CSCORE_padj.rds")
+      Fibroblast_cor                         <- readRDS(cor_file_path)$Fibroblast
+      Fibroblast_padj                        <- readRDS(padj_file_path)$Fibroblast
+      Fibroblast_cor[Fibroblast_padj > 0.05]      <- 0
+      return(list(Fibroblast_cor))
+    },error=function(e){message(paste("Error processing dataset", dataset_id, ": ", e$message))
+    })
+  }
+  return(Fibroblast_matrix_list)
+}
+Fibroblast_matrix_list                      <- process_data_for_files(dataset_list)
+stopCluster(cl)
+Fibroblast_matrix_list                      <- Fibroblast_matrix_list[1]
+names(Fibroblast_matrix_list)               <- unlist(dataset_list[1])
+
+####merge the resluts of all datasets
+library(dplyr)
+library(tidyr)
+cl                                 <- makeCluster(num_cores)
+registerDoParallel(cl)
+all_pairs                          <- foreach(mat = Fibroblast_matrix_list) %dopar% {
+  mat[lower.tri(mat)]              <- NA
+  temp_data       <- as.data.frame(which(!is.na(mat), arr.ind = TRUE))
+  temp_data$value <- mat[!is.na(mat)]
+  temp_data$gene1 <- rownames(mat)[temp_data$row]
+  temp_data$gene2 <- colnames(mat)[temp_data$col]
+  temp_data
+} 
+stopCluster(cl)
+all_pairs         <- do.call(rbind,all_pairs)
+#### Count the frequency of occurrence of each gene pair
+Fibroblast_normal_Kidney_pair_counts <- all_pairs 
+range(Fibroblast_normal_Kidney_pair_counts$count)
+saveRDS(Fibroblast_normal_Kidney_pair_counts,file="Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Fibroblast/Fibroblast_normal_Kidney_pair_counts.rds")
+
+
+
+library(ggplot2)
+ggplot(Fibroblast_normal_Kidney_pair_counts, aes(y = median_value)) + 
+  geom_boxplot(outlier.colour = "red", outlier.shape = 16, outlier.size = 1) +
+  theme_minimal()
+stats                 <- boxplot.stats(Fibroblast_normal_Kidney_pair_counts$value)
+outlier               <- stats$out
+
+Q1                       <- quantile(Fibroblast_normal_Kidney_pair_counts$value, 0.25)
+Q3                       <- quantile(Fibroblast_normal_Kidney_pair_counts$value, 0.75)
+IQR                      <- Q3 - Q1
+threshold_1              <- Q3 + 1.5 * IQR #0
+threshold_2              <- Q1 - 1.5*IQR  #0
+Fibroblast_reliable_coexp     <- Fibroblast_normal_Kidney_pair_counts[Fibroblast_normal_Kidney_pair_counts$value > threshold_1 |
+                                                                        Fibroblast_normal_Kidney_pair_counts$value < threshold_2, ]
+Fibroblast_normal_Kidney_reliable_coexp_df  <- Fibroblast_reliable_coexp
+#36056
+saveRDS(Fibroblast_normal_Kidney_reliable_coexp_df,file = "Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Fibroblast/Fibroblast_normal_Kidney_reliable_coexp_df.rds")
+####Convert data frame into matrixs
+library(data.table)
+genes                                         <- unique(c(Fibroblast_normal_Kidney_reliable_coexp_df$gene1, Fibroblast_normal_Kidney_reliable_coexp_df$gene2))
+corr_matrix                                   <- matrix(NA, nrow = length(genes), ncol = length(genes), dimnames = list(genes, genes))
+Fibroblast_normal_Kidney_reliable_coexp_df_dt                     <- as.data.table(Fibroblast_normal_Kidney_reliable_coexp_df)
+#Create an index mapping
+gene_index                                    <- setNames(seq_along(genes), genes)
+#Fill the correlation matrix with vectorization operation
+row_indices                                   <- gene_index[Fibroblast_normal_Kidney_reliable_coexp_df_dt$gene1]
+col_indices                                   <- gene_index[Fibroblast_normal_Kidney_reliable_coexp_df_dt$gene2]
+corr_matrix[cbind(row_indices, col_indices)]  <- Fibroblast_normal_Kidney_reliable_coexp_df_dt$value
+corr_matrix[cbind(col_indices, row_indices)]  <- Fibroblast_normal_Kidney_reliable_coexp_df_dt$value
+Fibroblast_normal_Kidney_pair_corr_matrix                   <- corr_matrix
+Fibroblast_normal_Kidney_pair_corr_matrix[is.na(Fibroblast_normal_Kidney_pair_corr_matrix)] <- 0
+Fibroblast_normal_Kidney_reliable_coexp_mat                 <- Fibroblast_normal_Kidney_pair_corr_matrix
+saveRDS(Fibroblast_normal_Kidney_reliable_coexp_mat,file="Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Fibroblast/Fibroblast_normal_Kidney_reliable_coexp_mat.rds")
+
+
+####*Endothelial####
+#select co-expressed gene pairs
+library(foreach)
+library(doParallel)
+num_cores                          <- 4
+cl                                 <- makeCluster(num_cores)
+registerDoParallel(cl)
+dataset_list                       <- list("Obradovic2021","Zhang2021","Krishna2021")
+process_data_for_files             <- function(dataset_list) {
+  Endothelial_matrix_list <- foreach ( dataset_id = dataset_list,.combine="c")%dopar% {
+    tryCatch({
+      cor_file_path                        <- paste0("~/Pro_CoExpression/output/data/3CA/Kidney/",dataset_id,"_Kidney/",dataset_id,"_normal_CSCORE_cor.rds")
+      padj_file_path                       <- paste0("~/Pro_CoExpression/output/data/3CA/Kidney/",dataset_id,"_Kidney/",dataset_id,"_normal_CSCORE_padj.rds")
+      Endothelial_cor                         <- readRDS(cor_file_path)$Endothelial
+      Endothelial_padj                        <- readRDS(padj_file_path)$Endothelial
+      Endothelial_cor[Endothelial_padj > 0.05]      <- 0
+      return(list(Endothelial_cor))
+    },error=function(e){message(paste("Error processing dataset", dataset_id, ": ", e$message))
+    })
+  }
+  return(Endothelial_matrix_list)
+}
+Endothelial_matrix_list                      <- process_data_for_files(dataset_list)
+stopCluster(cl)
+names(Endothelial_matrix_list)               <- unlist(dataset_list)
+
+
+####Young2018
+Young2018_kidney_normal_Endothelial_CSCORE_cor   <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/Young2018_Kidney/Young2018_kid_N_adults_RCC_CSCORE_cor.rds")$Endothelial
+Young2018_kidney_normal_Endothelial_CSCORE_padj  <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/Young2018_Kidney/Young2018_kid_N_adults_RCC_CSCORE_padj.rds")$Endothelial
+Young2018_kidney_normal_Endothelial_CSCORE_cor[Young2018_kidney_normal_Endothelial_CSCORE_padj  > 0.05]   <- 0
+Endothelial_matrix_list                         <- append(Endothelial_matrix_list,list(Young2018_kidney_normal_Endothelial_CSCORE_cor))
+names(Endothelial_matrix_list)[4]             <- c("Young2018")
+
+####merge the resluts of all datasets
+library(dplyr)
+library(tidyr)
+cl                                 <- makeCluster(num_cores)
+registerDoParallel(cl)
+all_pairs                          <- foreach(mat = Endothelial_matrix_list) %dopar% {
+  mat[lower.tri(mat)]              <- NA
+  temp_data       <- as.data.frame(which(!is.na(mat), arr.ind = TRUE))
+  temp_data$value <- mat[!is.na(mat)]
+  temp_data$gene1 <- rownames(mat)[temp_data$row]
+  temp_data$gene2 <- colnames(mat)[temp_data$col]
+  temp_data
+} 
+stopCluster(cl)
+all_pairs         <- do.call(rbind,all_pairs)
+#### Count the frequency of occurrence of each gene pair
+Endothelial_normal_Kidney_pair_counts <- all_pairs %>%
+  group_by(gene1, gene2) %>%
+  summarise(count = n(), median_value = median(value, na.rm = TRUE),.groups = "drop") %>%
+  filter(count >= 2)  # Select gene pairs that appear in at least two matrices
+saveRDS(Endothelial_normal_Kidney_pair_counts,file="Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Endothelial/Endothelial_normal_Kidney_pair_counts.rds")
+
+
+
+library(ggplot2)
+ggplot(Endothelial_normal_Kidney_pair_counts, aes(y = median_value)) + 
+  geom_boxplot(outlier.colour = "red", outlier.shape = 16, outlier.size = 1) +
+  theme_minimal()
+stats                 <- boxplot.stats(Endothelial_normal_Kidney_pair_counts$median_value)
+outlier               <- stats$out
+
+Q1                       <- quantile(Endothelial_normal_Kidney_pair_counts$median_value, 0.25)
+Q3                       <- quantile(Endothelial_normal_Kidney_pair_counts$median_value, 0.75)
+IQR                      <- Q3 - Q1
+threshold_1              <- Q3 + 1.5 * IQR #0
+threshold_2              <- Q1 - 1.5*IQR  #0
+Endothelial_reliable_coexp     <- Endothelial_normal_Kidney_pair_counts[Endothelial_normal_Kidney_pair_counts$median_value > threshold_1 |
+                                                                          Endothelial_normal_Kidney_pair_counts$median_value < threshold_2, ]
+Endothelial_normal_Kidney_reliable_coexp_df  <- Endothelial_reliable_coexp
+#621107
+saveRDS(Endothelial_normal_Kidney_reliable_coexp_df,file = "Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Endothelial/Endothelial_normal_Kidney_reliable_coexp_df.rds")
+####Convert data frame into matrixs
+library(data.table)
+genes                                         <- unique(c(Endothelial_normal_Kidney_reliable_coexp_df$gene1, Endothelial_normal_Kidney_reliable_coexp_df$gene2))
+corr_matrix                                   <- matrix(NA, nrow = length(genes), ncol = length(genes), dimnames = list(genes, genes))
+Endothelial_normal_Kidney_reliable_coexp_df_dt                     <- as.data.table(Endothelial_normal_Kidney_reliable_coexp_df)
+#Create an index mapping
+gene_index                                    <- setNames(seq_along(genes), genes)
+#Fill the correlation matrix with vectorization operation
+row_indices                                   <- gene_index[Endothelial_normal_Kidney_reliable_coexp_df_dt$gene1]
+col_indices                                   <- gene_index[Endothelial_normal_Kidney_reliable_coexp_df_dt$gene2]
+corr_matrix[cbind(row_indices, col_indices)]  <- Endothelial_normal_Kidney_reliable_coexp_df_dt$median_value
+corr_matrix[cbind(col_indices, row_indices)]  <- Endothelial_normal_Kidney_reliable_coexp_df_dt$median_value
+Endothelial_normal_Kidney_pair_corr_matrix                   <- corr_matrix
+Endothelial_normal_Kidney_pair_corr_matrix[is.na(Endothelial_normal_Kidney_pair_corr_matrix)] <- 0
+Endothelial_normal_Kidney_reliable_coexp_mat                 <- Endothelial_normal_Kidney_pair_corr_matrix
+saveRDS(Endothelial_normal_Kidney_reliable_coexp_mat,file="Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Endothelial/Endothelial_normal_Kidney_reliable_coexp_mat.rds")
+
+####*Macrophage####
+#select co-expressed gene pairs
+library(foreach)
+library(doParallel)
+num_cores                          <- 4
+cl                                 <- makeCluster(num_cores)
+registerDoParallel(cl)
+dataset_list                       <- list("Obradovic2021","Zhang2021","Krishna2021")
+process_data_for_files             <- function(dataset_list) {
+  Macrophage_matrix_list <- foreach ( dataset_id = dataset_list,.combine="c")%dopar% {
+    tryCatch({
+      cor_file_path                        <- paste0("~/Pro_CoExpression/output/data/3CA/Kidney/",dataset_id,"_Kidney/",dataset_id,"_normal_CSCORE_cor.rds")
+      padj_file_path                       <- paste0("~/Pro_CoExpression/output/data/3CA/Kidney/",dataset_id,"_Kidney/",dataset_id,"_normal_CSCORE_padj.rds")
+      Macrophage_cor                         <- readRDS(cor_file_path)$Macrophage
+      Macrophage_padj                        <- readRDS(padj_file_path)$Macrophage
+      Macrophage_cor[Macrophage_padj > 0.05]      <- 0
+      return(list(Macrophage_cor))
+    },error=function(e){message(paste("Error processing dataset", dataset_id, ": ", e$message))
+    })
+  }
+  return(Macrophage_matrix_list)
+}
+Macrophage_matrix_list                      <- process_data_for_files(dataset_list)
+stopCluster(cl)
+names(Macrophage_matrix_list)               <- unlist(dataset_list)
+
+
+####Young2018
+Young2018_kidney_normal_Macrophage_CSCORE_cor   <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/Young2018_Kidney/Young2018_kid_N_adults_RCC_CSCORE_cor.rds")$Macrophage
+Young2018_kidney_normal_Macrophage_CSCORE_padj  <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/Young2018_Kidney/Young2018_kid_N_adults_RCC_CSCORE_padj.rds")$Macrophage
+Young2018_kidney_normal_Macrophage_CSCORE_cor[Young2018_kidney_normal_Macrophage_CSCORE_padj  > 0.05]   <- 0
+Macrophage_matrix_list                         <- append(Macrophage_matrix_list,list(Young2018_kidney_normal_Macrophage_CSCORE_cor))
+names(Macrophage_matrix_list)[4]               <- c("Young2018")
+
+####merge the resluts of all datasets
+library(dplyr)
+library(tidyr)
+cl                                 <- makeCluster(num_cores)
+registerDoParallel(cl)
+all_pairs                          <- foreach(mat = Macrophage_matrix_list) %dopar% {
+  mat[lower.tri(mat)]              <- NA
+  temp_data       <- as.data.frame(which(!is.na(mat), arr.ind = TRUE))
+  temp_data$value <- mat[!is.na(mat)]
+  temp_data$gene1 <- rownames(mat)[temp_data$row]
+  temp_data$gene2 <- colnames(mat)[temp_data$col]
+  temp_data
+} 
+stopCluster(cl)
+all_pairs         <- do.call(rbind,all_pairs)
+#### Count the frequency of occurrence of each gene pair
+Macrophage_normal_Kidney_pair_counts <- all_pairs %>%
+  group_by(gene1, gene2) %>%
+  summarise(count = n(), median_value = median(value, na.rm = TRUE),.groups = "drop") %>%
+  filter(count >= 2)  # Select gene pairs that appear in at least two matrices
+saveRDS(Macrophage_normal_Kidney_pair_counts,file="Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Macrophage/Macrophage_normal_Kidney_pair_counts.rds")
+
+
+
+library(ggplot2)
+ggplot(Macrophage_normal_Kidney_pair_counts, aes(y = median_value)) + 
+  geom_boxplot(outlier.colour = "red", outlier.shape = 16, outlier.size = 1) +
+  theme_minimal()
+stats                 <- boxplot.stats(Macrophage_normal_Kidney_pair_counts$median_value)
+outlier               <- stats$out
+
+Q1                       <- quantile(Macrophage_normal_Kidney_pair_counts$median_value, 0.25)
+Q3                       <- quantile(Macrophage_normal_Kidney_pair_counts$median_value, 0.75)
+IQR                      <- Q3 - Q1
+threshold_1              <- Q3 + 1.5 * IQR #0
+threshold_2              <- Q1 - 1.5*IQR  #0
+Macrophage_reliable_coexp     <- Macrophage_normal_Kidney_pair_counts[Macrophage_normal_Kidney_pair_counts$median_value > threshold_1 |
+                                                                        Macrophage_normal_Kidney_pair_counts$median_value < threshold_2, ]
+Macrophage_normal_Kidney_reliable_coexp_df  <- Macrophage_reliable_coexp
+#488122
+saveRDS(Macrophage_normal_Kidney_reliable_coexp_df,file = "Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Macrophage/Macrophage_normal_Kidney_reliable_coexp_df.rds")
+####Convert data frame into matrixs
+library(data.table)
+genes                                         <- unique(c(Macrophage_normal_Kidney_reliable_coexp_df$gene1, Macrophage_normal_Kidney_reliable_coexp_df$gene2))
+corr_matrix                                   <- matrix(NA, nrow = length(genes), ncol = length(genes), dimnames = list(genes, genes))
+Macrophage_normal_Kidney_reliable_coexp_df_dt                     <- as.data.table(Macrophage_normal_Kidney_reliable_coexp_df)
+#Create an index mapping
+gene_index                                    <- setNames(seq_along(genes), genes)
+#Fill the correlation matrix with vectorization operation
+row_indices                                   <- gene_index[Macrophage_normal_Kidney_reliable_coexp_df_dt$gene1]
+col_indices                                   <- gene_index[Macrophage_normal_Kidney_reliable_coexp_df_dt$gene2]
+corr_matrix[cbind(row_indices, col_indices)]  <- Macrophage_normal_Kidney_reliable_coexp_df_dt$median_value
+corr_matrix[cbind(col_indices, row_indices)]  <- Macrophage_normal_Kidney_reliable_coexp_df_dt$median_value
+Macrophage_normal_Kidney_pair_corr_matrix                   <- corr_matrix
+Macrophage_normal_Kidney_pair_corr_matrix[is.na(Macrophage_normal_Kidney_pair_corr_matrix)] <- 0
+Macrophage_normal_Kidney_reliable_coexp_mat                 <- Macrophage_normal_Kidney_pair_corr_matrix
+saveRDS(Macrophage_normal_Kidney_reliable_coexp_mat,file="Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Macrophage/Macrophage_normal_Kidney_reliable_coexp_mat.rds")
+
+
+####*Epithelial####
+#select co-expressed gene pairs
+library(foreach)
+library(doParallel)
+num_cores                          <- 4
+cl                                 <- makeCluster(num_cores)
+registerDoParallel(cl)
+dataset_list                       <- list("Obradovic2021","Zhang2021","Krishna2021")
+process_data_for_files             <- function(dataset_list) {
+  Epithelial_matrix_list <- foreach ( dataset_id = dataset_list,.combine="c")%dopar% {
+    tryCatch({
+      cor_file_path                        <- paste0("~/Pro_CoExpression/output/data/3CA/Kidney/",dataset_id,"_Kidney/",dataset_id,"_normal_CSCORE_cor.rds")
+      padj_file_path                       <- paste0("~/Pro_CoExpression/output/data/3CA/Kidney/",dataset_id,"_Kidney/",dataset_id,"_normal_CSCORE_padj.rds")
+      Epithelial_cor                         <- readRDS(cor_file_path)$Epithelial
+      Epithelial_padj                        <- readRDS(padj_file_path)$Epithelial
+      Epithelial_cor[Epithelial_padj > 0.05]      <- 0
+      return(list(Epithelial_cor))
+    },error=function(e){message(paste("Error processing dataset", dataset_id, ": ", e$message))
+    })
+  }
+  return(Epithelial_matrix_list)
+}
+Epithelial_matrix_list                      <- process_data_for_files(dataset_list)
+stopCluster(cl)
+names(Epithelial_matrix_list)               <- unlist(dataset_list)
+
+
+####Young2018
+Young2018_kidney_normal_Epithelial_CSCORE_cor   <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/Young2018_Kidney/Young2018_kid_N_adults_RCC_CSCORE_cor.rds")$Epithelial
+Young2018_kidney_normal_Epithelial_CSCORE_padj  <- readRDS("~/Pro_CoExpression/output/data/3CA/Kidney/Young2018_Kidney/Young2018_kid_N_adults_RCC_CSCORE_padj.rds")$Epithelial
+Young2018_kidney_normal_Epithelial_CSCORE_cor[Young2018_kidney_normal_Epithelial_CSCORE_padj  > 0.05]   <- 0
+Epithelial_matrix_list                         <- append(Epithelial_matrix_list,list(Young2018_kidney_normal_Epithelial_CSCORE_cor))
+names(Epithelial_matrix_list)[4]             <- c("Young2018")
+
+####merge the resluts of all datasets
+library(dplyr)
+library(tidyr)
+cl                                 <- makeCluster(num_cores)
+registerDoParallel(cl)
+all_pairs                          <- foreach(mat = Epithelial_matrix_list) %dopar% {
+  mat[lower.tri(mat)]              <- NA
+  temp_data       <- as.data.frame(which(!is.na(mat), arr.ind = TRUE))
+  temp_data$value <- mat[!is.na(mat)]
+  temp_data$gene1 <- rownames(mat)[temp_data$row]
+  temp_data$gene2 <- colnames(mat)[temp_data$col]
+  temp_data
+} 
+stopCluster(cl)
+all_pairs         <- do.call(rbind,all_pairs)
+#### Count the frequency of occurrence of each gene pair
+Epithelial_normal_Kidney_pair_counts <- all_pairs %>%
+  group_by(gene1, gene2) %>%
+  summarise(count = n(), median_value = median(value, na.rm = TRUE),.groups = "drop") %>%
+  filter(count >= 2)  # Select gene pairs that appear in at least two matrices
+saveRDS(Epithelial_normal_Kidney_pair_counts,file="Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Malignant/Epithelial_normal_Kidney_pair_counts.rds")
+
+
+
+library(ggplot2)
+ggplot(Epithelial_normal_Kidney_pair_counts, aes(y = median_value)) + 
+  geom_boxplot(outlier.colour = "red", outlier.shape = 16, outlier.size = 1) +
+  theme_minimal()
+stats                 <- boxplot.stats(Epithelial_normal_Kidney_pair_counts$median_value)
+outlier               <- stats$out
+
+Q1                       <- quantile(Epithelial_normal_Kidney_pair_counts$median_value, 0.25)
+Q3                       <- quantile(Epithelial_normal_Kidney_pair_counts$median_value, 0.75)
+IQR                      <- Q3 - Q1
+threshold_1              <- Q3 + 1.5 * IQR #0
+threshold_2              <- Q1 - 1.5*IQR  #0
+Epithelial_reliable_coexp     <- Epithelial_normal_Kidney_pair_counts[Epithelial_normal_Kidney_pair_counts$median_value > threshold_1 |
+                                                                        Epithelial_normal_Kidney_pair_counts$median_value < threshold_2, ]
+Epithelial_normal_Kidney_reliable_coexp_df  <- Epithelial_reliable_coexp
+#3847410
+saveRDS(Epithelial_normal_Kidney_reliable_coexp_df,file = "Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Malignant/Epithelial_normal_Kidney_reliable_coexp_df.rds")
+####Convert data frame into matrixs
+library(data.table)
+genes                                         <- unique(c(Epithelial_normal_Kidney_reliable_coexp_df$gene1, Epithelial_normal_Kidney_reliable_coexp_df$gene2))
+corr_matrix                                   <- matrix(NA, nrow = length(genes), ncol = length(genes), dimnames = list(genes, genes))
+Epithelial_normal_Kidney_reliable_coexp_df_dt                     <- as.data.table(Epithelial_normal_Kidney_reliable_coexp_df)
+#Create an index mapping
+gene_index                                    <- setNames(seq_along(genes), genes)
+#Fill the correlation matrix with vectorization operation
+row_indices                                   <- gene_index[Epithelial_normal_Kidney_reliable_coexp_df_dt$gene1]
+col_indices                                   <- gene_index[Epithelial_normal_Kidney_reliable_coexp_df_dt$gene2]
+corr_matrix[cbind(row_indices, col_indices)]  <- Epithelial_normal_Kidney_reliable_coexp_df_dt$median_value
+corr_matrix[cbind(col_indices, row_indices)]  <- Epithelial_normal_Kidney_reliable_coexp_df_dt$median_value
+Epithelial_normal_Kidney_pair_corr_matrix                   <- corr_matrix
+Epithelial_normal_Kidney_pair_corr_matrix[is.na(Epithelial_normal_Kidney_pair_corr_matrix)] <- 0
+Epithelial_normal_Kidney_reliable_coexp_mat                 <- Epithelial_normal_Kidney_pair_corr_matrix
+saveRDS(Epithelial_normal_Kidney_reliable_coexp_mat,file="Pro_CoExpression/output/data/3CA/Kidney/common_genesets/Malignant/Epithelial_normal_Kidney_reliable_coexp_mat.rds")
